@@ -1,0 +1,32 @@
+name: Build Ersha OS
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Run Flake Check
+        run: nix flake check
+
+      - name: Check Rust Formatting
+        run: nix develop -c cargo fmt --check
+
+      - name: Run Rust Clippy
+        run: nix develop -c cargo clippy -- -D warnings
+
+      - name: Run Rust Tests
+        run: nix develop -c cargo test
+
+      - name: Build Rust Project
+        run: nix develop -c cargo build --release
