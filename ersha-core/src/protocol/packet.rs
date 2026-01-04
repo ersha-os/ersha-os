@@ -78,19 +78,19 @@ impl PacketHeader {
 pub struct Packet {
     pub preamble: u16,
     pub header: PacketHeader,
-    pub payload: [u8; MAX_PACKET_SIZE - PREAMBLE_SIZE - PACKET_HEADER_SIZE],
+    pub payload: [u8; MAX_PAYLOAD_SIZE],
 }
 
 impl Packet {
     pub fn new(packet_type: PacketType, node_id: u16, payload: &[u8]) -> ParseResult<Self> {
-        if payload.len() > MAX_PACKET_SIZE {
+        if payload.len() > MAX_PAYLOAD_SIZE {
             return Err(ProtocolError::PayloadTooLarge {
                 max: MAX_PACKET_SIZE,
                 size: payload.len(),
             });
         }
 
-        let mut buf = [0u8; MAX_PACKET_SIZE - PREAMBLE_SIZE - PACKET_HEADER_SIZE];
+        let mut buf = [0u8; MAX_PAYLOAD_SIZE];
         buf[..payload.len()].copy_from_slice(payload);
 
         Ok(Self {
@@ -133,7 +133,7 @@ impl Packet {
             });
         }
 
-        let mut payload = [0u8; MAX_PACKET_SIZE - PREAMBLE_SIZE - PACKET_HEADER_SIZE];
+        let mut payload = [0u8; MAX_PAYLOAD_SIZE];
         payload[..header.payload_len as usize]
             .copy_from_slice(&bytes[PREAMBLE_SIZE + PACKET_HEADER_SIZE..total_len]);
 
