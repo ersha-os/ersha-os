@@ -1,4 +1,4 @@
-use super::{error::ParseResult, *};
+use super::{error::ParseResult, error::ProtocolError, *};
 
 // packet structure : preamble(2) + header(6) + payload + crc(2) + postamble(1)
 
@@ -100,15 +100,8 @@ impl Packet {
         })
     }
 
-    pub fn payload_capacity() -> usize {
-        MAX_PACKET_SIZE - PREAMBLE_SIZE - PACKET_HEADER_SIZE
-    }
-
-    pub fn payload(&self) -> &[u8] {
-        &self.payload[..self.header.payload_len as usize]
-    }
-
     pub fn from_bytes(bytes: &[u8]) -> ParseResult<Self> {
+        // it should at least have a preamble and a header
         if bytes.len() < PREAMBLE_SIZE + PACKET_HEADER_SIZE {
             return Err(ProtocolError::InsufficientData {
                 needed: PREAMBLE_SIZE + PACKET_HEADER_SIZE,
@@ -159,9 +152,5 @@ impl Packet {
             .copy_from_slice(&self.payload[..payload_len]);
 
         bytes
-    }
-
-    pub fn wire_len(&self) -> usize {
-        PREAMBLE_SIZE + PACKET_HEADER_SIZE + self.header.payload_len as usize
     }
 }
