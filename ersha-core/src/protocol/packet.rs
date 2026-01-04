@@ -2,6 +2,7 @@ use super::{error::ParseResult, *};
 
 // packet structure : preamble(2) + header(6) + payload + crc(2) + postamble(1)
 
+#[derive(Debug, Clone, Copy)]
 pub enum PacketType {
     SensorData = 0x01,
     Heartbeat = 0x02,
@@ -21,7 +22,7 @@ impl TryFrom<u8> for PacketType {
 
 pub struct PacketHeader {
     pub version: u8,
-    pub packet_type: u8,
+    pub packet_type: PacketType,
     pub node_id: u16,
     pub payload_len: u16,
 }
@@ -30,7 +31,7 @@ impl PacketHeader {
     pub fn new(packet_type: PacketType, node_id: u16, payload_len: u16) -> Self {
         Self {
             version: PROTOCOL_VERSION,
-            packet_type: packet_type as u8,
+            packet_type: packet_type,
             node_id,
             payload_len,
         }
@@ -45,7 +46,7 @@ impl PacketHeader {
         }
         Ok(Self {
             version: bytes[0],
-            packet_type: bytes[1],
+            packet_type: PacketType::try_from(bytes[1])?,
             node_id: u16::from_le_bytes([bytes[2], bytes[3]]),
             payload_len: u16::from_le_bytes([bytes[4], bytes[5]]),
         })
@@ -55,10 +56,10 @@ impl PacketHeader {
         let mut bytes = [0u8; 6];
 
         bytes[0] = self.version;
-        bytes[1] = self.packet_type;
+        bytes[1] = self.packet_type as u8;
 
         let node_le: [u8; 2] = self.node_id.to_le_bytes();
-        let payload_len_le: [u8; 2] = self.node_id.to_le_bytes();
+        let payload_len_le: [u8; 2] = self.payload_len.to_le_bytes();
 
         bytes[2] = node_le[0];
         bytes[3] = node_le[1];
