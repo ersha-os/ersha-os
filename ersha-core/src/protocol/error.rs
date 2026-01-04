@@ -10,4 +10,5 @@ pub enum ProtocolError {
     InvalidDataFormat(u8),
     PayloadTooLarge { size: usize, max: usize },
     IoError(String),
+    UnsupportedVersion(u8),
 }

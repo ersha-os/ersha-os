@@ -44,6 +44,11 @@ impl PacketHeader {
                 available: bytes.len(),
             });
         }
+
+        if bytes[0] != PROTOCOL_VERSION {
+            return Err(ProtocolError::UnsupportedVersion(bytes[0]));
+        }
+
         Ok(Self {
             version: bytes[0],
             packet_type: PacketType::try_from(bytes[1])?,
