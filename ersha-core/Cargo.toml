@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+jiff = { version = "0.2.18", features = ["serde"] }
+serde = { version = "1.0.228", features = ["derive"] }
+ulid = { version = "1.2.1", features = ["serde"] }
