@@ -62,7 +62,7 @@ pub struct ReadingQuality {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum QualityStatus {
-    Ok,
+    Good,
     Suspect,
     Bad,
 }
