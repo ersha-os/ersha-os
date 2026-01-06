@@ -2,3 +2,5 @@
 resolver = "3"
 members = ["ersha-core", "ersha-dispatch", "ersha-prime"]
 
+[workspace.dependencies]
+jiff = { version = "0.2.18", features = ["serde"] }

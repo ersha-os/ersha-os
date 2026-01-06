@@ -30,6 +30,10 @@ version = "0.1.0"
 [[package]]
 name = "ersha-prime"
 version = "0.1.0"
+dependencies = [
+ "ersha-core",
+ "jiff",
+]
 
 [[package]]
 name = "getrandom"
