@@ -27,6 +27,10 @@ pub struct DispatcherId(pub Ulid);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BatchId(pub Ulid);
 
+/// Unique identifier for a sensor
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct SensorId(pub Ulid);
+
 /// H3 cell index (hex-like 64-bit integer) representing a spatial cell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct H3Cell(pub u64);
@@ -50,6 +54,38 @@ pub struct Device {
     pub manufacturer: Option<BoxStr>,
     /// Provisioning timestamp.
     pub provisioned_at: jiff::Timestamp,
+    /// Sensors attached to this device.
+    pub sensors: BoxList<Sensor>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Sensor {
+    pub id: SensorId,
+    pub metric: SensorMetric,
+    pub kind: SensorKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SensorStatus {
+    pub sensor_id: SensorId,
+    pub state: SensorState,
+    pub last_reading: Option<jiff::Timestamp>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SensorState {
+    Active,
+    Faulty,
+    Inactive,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SensorKind {
+    SoilMoisture,
+    SoilTemp,
+    AirTemp,
+    Humidity,
+    Rainfall,
 }
 
 /// Device classification.
@@ -85,6 +121,8 @@ pub struct SensorReading {
     pub confidence: Percentage,
     /// Timestamp of the reading event.
     pub timestamp: jiff::Timestamp,
+    /// The specific sensor that produced this reading
+    pub sensor_id: SensorId,
 }
 
 /// Supported sensor metrics.
@@ -132,6 +170,8 @@ pub struct DeviceStatus {
     pub errors: BoxList<DeviceError>,
     /// Timestamp when status was captured.
     pub timestamp: jiff::Timestamp,
+    /// The status of each sensor attached to this device
+    pub sensor_statuses: BoxList<SensorStatus>,
 }
 
 /// A structured error from a device.
