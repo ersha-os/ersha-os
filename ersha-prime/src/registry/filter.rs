@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 use ersha_core::{DeviceId, DeviceKind, DeviceState, DispatcherState, H3Cell};
 
 use jiff;
@@ -127,4 +126,41 @@ impl DeviceFilterBuilder {
 pub struct DispatcherFilter {
     pub states: Option<Vec<DispatcherState>>,
     pub locations: Option<Vec<H3Cell>>,
+}
+
+impl DispatcherFilter {
+    pub fn builder() -> DispatcherFilterBuilder {
+        DispatcherFilterBuilder::new()
+    }
+}
+
+#[derive(Default)]
+pub struct DispatcherFilterBuilder {
+    filter: DispatcherFilter,
+}
+
+impl DispatcherFilterBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn states<I>(mut self, states: I) -> Self
+    where
+        I: IntoIterator<Item = DispatcherState>,
+    {
+        self.filter.states = Some(states.into_iter().collect());
+        self
+    }
+
+    pub fn locations<I>(mut self, locations: I) -> Self
+    where
+        I: IntoIterator<Item = H3Cell>,
+    {
+        self.filter.locations = Some(locations.into_iter().collect());
+        self
+    }
+
+    pub fn build(self) -> DispatcherFilter {
+        self.filter
+    }
 }

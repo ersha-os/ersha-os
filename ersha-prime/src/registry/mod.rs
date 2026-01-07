@@ -1,4 +1,5 @@
-mod filter;
+#![allow(dead_code)]
+pub mod filter;
 
 use ersha_core::{Device, DeviceId, Dispatcher, DispatcherId};
 use filter::{DeviceFilter, DispatcherFilter, QueryOptions};
