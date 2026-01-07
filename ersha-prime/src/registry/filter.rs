@@ -2,7 +2,7 @@
 use ersha_core::{DeviceId, DeviceKind, DeviceState, DispatcherState, H3Cell};
 
 use jiff;
-use std::{collections::HashSet, ops::RangeInclusive};
+use std::ops::RangeInclusive;
 
 pub enum SortBy {
     Id,
@@ -37,10 +37,10 @@ pub struct QueryOptions<F> {
 
 #[derive(Default)]
 pub struct DeviceFilter {
-    pub ids: Option<HashSet<DeviceId>>,
-    pub states: Option<HashSet<DeviceState>>,
-    pub kinds: Option<HashSet<DeviceKind>>,
-    pub locations: Option<HashSet<H3Cell>>,
+    pub ids: Option<Vec<DeviceId>>,
+    pub states: Option<Vec<DeviceState>>,
+    pub kinds: Option<Vec<DeviceKind>>,
+    pub locations: Option<Vec<H3Cell>>,
     pub provisioned_after: Option<jiff::Timestamp>,
     pub provisioned_before: Option<jiff::Timestamp>,
     pub sensor_count: Option<RangeInclusive<usize>>,
@@ -49,6 +49,6 @@ pub struct DeviceFilter {
 
 #[derive(Default)]
 pub struct DispatcherFilter {
-    pub states: Option<HashSet<DispatcherState>>,
-    pub locations: Option<HashSet<H3Cell>>,
+    pub states: Option<Vec<DispatcherState>>,
+    pub locations: Option<Vec<H3Cell>>,
 }
