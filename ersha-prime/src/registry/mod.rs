@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 pub mod filter;
+pub mod memory;
 
 use ersha_core::{Device, DeviceId, Dispatcher, DispatcherId};
 use filter::{DeviceFilter, DispatcherFilter, QueryOptions};
@@ -25,7 +26,7 @@ trait DispatcherRegistry {
     async fn update(&mut self, id: DispatcherId, new: Dispatcher) -> Result<(), Self::Error>;
     async fn suspend(&mut self, id: DispatcherId) -> Result<(), Self::Error>;
 
-    async fn batch_register(&mut self, devices: Vec<Dispatcher>) -> Result<(), Self::Error>;
+    async fn batch_register(&mut self, dispatchers: Vec<Dispatcher>) -> Result<(), Self::Error>;
     async fn count(&self, filter: Option<DispatcherFilter>) -> Result<usize, Self::Error>;
     async fn list(
         &self,
