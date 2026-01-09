@@ -4,3 +4,8 @@ members = ["ersha-core", "ersha-dispatch", "ersha-prime"]
 
 [workspace.dependencies]
 jiff = { version = "0.2.18", features = ["serde"] }
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

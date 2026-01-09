@@ -2,5 +2,6 @@
 name = "ersha-dispatch"
 version = "0.1.0"
 edition = "2024"
+repository = "https://github.com/ersha-os/ersha-os"
 
 [dependencies]
