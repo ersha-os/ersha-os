@@ -32,6 +32,10 @@ name = "ersha-prime"
 version = "0.1.0"
 
 [[package]]
+name = "ersha-rpc"
+version = "0.1.0"
+
+[[package]]
 name = "getrandom"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

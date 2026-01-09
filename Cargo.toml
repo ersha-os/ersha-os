@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["ersha-core", "ersha-dispatch", "ersha-prime"]
+members = ["ersha-core", "ersha-dispatch", "ersha-prime", "ersha-rpc"]
 
 # The profile that 'dist' will build with
 [profile.dist]
