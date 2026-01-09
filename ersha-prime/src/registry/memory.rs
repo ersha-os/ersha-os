@@ -4,7 +4,7 @@ use ersha_core::{Dispatcher, DispatcherId, DispatcherState};
 
 use super::{
     DispatcherRegistry,
-    filter::{DispatcherFilter, DispatcherSortBy, QueryOptions},
+    filter::{DispatcherFilter, DispatcherSortBy, Pagination, QueryOptions, SortOrder},
 };
 
 pub enum InMemoryError {
@@ -70,8 +70,57 @@ impl DispatcherRegistry for InMemoryDispatcherRegistry {
         &self,
         options: QueryOptions<DispatcherFilter, DispatcherSortBy>,
     ) -> Result<Vec<Dispatcher>, Self::Error> {
-        todo!()
+        let filtered: Vec<&Dispatcher> =
+            filter_dispatchers(&self.dispatchers, &options.filter).collect();
+        let sorted = sort_dispatchers(filtered, &options.sort_by, &options.sort_order);
+        let paginated = paginate_dispatchers(sorted, &options.pagination);
+
+        Ok(paginated)
     }
+}
+
+fn paginate_dispatchers(dispatchers: Vec<&Dispatcher>, pagination: &Pagination) -> Vec<Dispatcher> {
+    match pagination {
+        Pagination::Offset { offset, limit } => dispatchers
+            .into_iter()
+            .skip(*offset)
+            .take(*limit)
+            .cloned()
+            .collect(),
+        Pagination::Cursor { after, limit } => {
+            if let Some(inner_ulid) = after {
+                let id = DispatcherId(inner_ulid.clone());
+                return dispatchers
+                    .into_iter()
+                    .skip_while(|dispatcher| dispatcher.id != id)
+                    .skip(1)
+                    .take(*limit)
+                    .cloned()
+                    .collect();
+            }
+
+            return vec![];
+        }
+    }
+}
+
+fn sort_dispatchers<'a>(
+    mut dispatchers: Vec<&'a Dispatcher>,
+    sort_by: &DispatcherSortBy,
+    sort_order: &SortOrder,
+) -> Vec<&'a Dispatcher> {
+    dispatchers.sort_by(|a, b| {
+        let ord = match sort_by {
+            DispatcherSortBy::ProvisionAt => a.provisioned_at.cmp(&b.provisioned_at),
+        };
+
+        match sort_order {
+            SortOrder::Asc => ord,
+            SortOrder::Desc => ord.reverse(),
+        }
+    });
+
+    dispatchers
 }
 
 fn filter_dispatchers<'a>(

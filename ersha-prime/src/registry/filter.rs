@@ -15,9 +15,6 @@ pub enum DeviceSortBy {
 }
 
 pub enum DispatcherSortBy {
-    Id,
-    Location,
-    State,
     ProvisionAt,
 }
 
