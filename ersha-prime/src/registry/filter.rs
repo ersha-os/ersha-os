@@ -2,6 +2,7 @@ use ersha_core::{DeviceId, DeviceKind, DeviceState, DispatcherState, H3Cell};
 
 use jiff;
 use std::ops::RangeInclusive;
+use ulid::Ulid;
 
 pub enum DeviceSortBy {
     Id,
@@ -26,14 +27,8 @@ pub enum SortOrder {
 }
 
 pub enum Pagination {
-    Offset {
-        offset: usize,
-        limit: usize,
-    },
-    Cursor {
-        after: Option<DeviceId>,
-        limit: usize,
-    },
+    Offset { offset: usize, limit: usize },
+    Cursor { after: Option<Ulid>, limit: usize },
 }
 
 pub struct QueryOptions<F, S> {
