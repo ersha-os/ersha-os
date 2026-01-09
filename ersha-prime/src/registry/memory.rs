@@ -57,7 +57,13 @@ impl DispatcherRegistry for InMemoryDispatcherRegistry {
     }
 
     async fn count(&self, filter: Option<DispatcherFilter>) -> Result<usize, Self::Error> {
-        todo!()
+        if let Some(filter) = filter {
+            let filtered = filter_dispatchers(&self.dispatchers, &filter);
+
+            return Ok(filtered.count());
+        }
+
+        Ok(self.dispatchers.len())
     }
 
     async fn list(
@@ -66,4 +72,25 @@ impl DispatcherRegistry for InMemoryDispatcherRegistry {
     ) -> Result<Vec<Dispatcher>, Self::Error> {
         todo!()
     }
+}
+
+fn filter_dispatchers<'a>(
+    dispatchers: &'a HashMap<DispatcherId, Dispatcher>,
+    filter: &DispatcherFilter,
+) -> impl Iterator<Item = &'a Dispatcher> {
+    dispatchers.values().filter_map(|dispatcher| {
+        if let Some(locations) = &filter.locations {
+            if !locations.contains(&dispatcher.location) {
+                return None;
+            }
+        }
+
+        if let Some(states) = &filter.states {
+            if !states.contains(&dispatcher.state) {
+                return None;
+            }
+        }
+
+        return Some(dispatcher);
+    })
 }

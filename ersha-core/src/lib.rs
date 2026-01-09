@@ -206,7 +206,7 @@ pub struct Dispatcher {
 }
 
 /// Dispatcher State
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DispatcherState {
     /// Dispatcher is permitted to upload data.
     Active,
