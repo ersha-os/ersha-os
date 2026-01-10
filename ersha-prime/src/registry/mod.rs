@@ -15,7 +15,11 @@ trait DeviceRegistry {
     async fn suspend(&mut self, id: DeviceId) -> Result<(), Self::Error>;
 
     async fn add_sensor(&mut self, id: DeviceId, sensor: Sensor) -> Result<(), Self::Error>;
-    async fn add_sensors(&mut self, id: DeviceId, sensors: Vec<Sensor>) -> Result<(), Self::Error>;
+    async fn add_sensors(
+        &mut self,
+        id: DeviceId,
+        sensors: impl Iterator<Item = Sensor>,
+    ) -> Result<(), Self::Error>;
     async fn batch_register(&mut self, devices: Vec<Device>) -> Result<(), Self::Error>;
     async fn count(&self, filter: Option<DeviceFilter>) -> Result<usize, Self::Error>;
     async fn list(
