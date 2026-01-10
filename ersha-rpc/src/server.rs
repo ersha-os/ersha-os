@@ -151,7 +151,6 @@ impl Server {
                 }
                 Err(e) => {
                     tracing::error!("error accepting connection: {:?}", e);
-                    break;
                 }
             }
         }
