@@ -5,6 +5,7 @@ members = ["ersha-core", "ersha-dispatch", "ersha-prime"]
 [workspace.dependencies]
 jiff = { version = "0.2.18", features = ["serde"] }
 ulid = { version = "1.2.1", features = ["serde"] }
+tokio = { version = "1", features = ["full", "macros", "rt-multi-thread"] }
 
 # The profile that 'dist' will build with
 [profile.dist]
