@@ -90,13 +90,13 @@ pub enum SensorKind {
 
 /// Device classification.
 /// Actuators can be added later.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DeviceKind {
     Sensor,
 }
 
 /// Device state.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DeviceState {
     /// Device is permitted to upload telemetry.
     Active,

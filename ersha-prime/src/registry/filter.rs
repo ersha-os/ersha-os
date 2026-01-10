@@ -5,10 +5,7 @@ use std::ops::RangeInclusive;
 use ulid::Ulid;
 
 pub enum DeviceSortBy {
-    Id,
-    Kind,
     State,
-    Location,
     Manufacturer,
     ProvisionAt,
     SensorCount,
