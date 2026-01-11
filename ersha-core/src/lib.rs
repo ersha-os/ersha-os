@@ -1,3 +1,4 @@
+use ordered_float::NotNan;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
@@ -65,14 +66,14 @@ pub struct Sensor {
     pub kind: SensorKind,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SensorStatus {
     pub sensor_id: SensorId,
     pub state: SensorState,
     pub last_reading: Option<jiff::Timestamp>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SensorState {
     Active,
     Faulty,
@@ -105,7 +106,7 @@ pub enum DeviceState {
 }
 
 /// A single sensor reading emitted by an edge device and forwarded by a dispatcher.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SensorReading {
     /// Unique id for this reading.
     pub id: ReadingId,
@@ -126,18 +127,18 @@ pub struct SensorReading {
 }
 
 /// Supported sensor metrics.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum SensorMetric {
     /// Soil moisture as a percentage.
     SoilMoisture { value: Percentage },
     /// Soil temperature in degrees Celsius.
-    SoilTemp { value: f64 },
+    SoilTemp { value: NotNan<f64> },
     /// Air temperature in degrees Celsius.
-    AirTemp { value: f64 },
+    AirTemp { value: NotNan<f64> },
     /// Relative humidity as a percentage.
     Humidity { value: Percentage },
     /// Rainfall in millimeters.
-    Rainfall { value: f64 },
+    Rainfall { value: NotNan<f64> },
 }
 
 /// Units used by metrics.
@@ -152,7 +153,7 @@ pub enum MetricUnit {
 }
 
 /// A status report emitted by a device.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceStatus {
     /// Unique id for this status record.
     pub id: StatusId,
@@ -175,7 +176,7 @@ pub struct DeviceStatus {
 }
 
 /// A structured error from a device.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceError {
     /// Canonical error category.
     pub code: DeviceErrorCode,
@@ -184,7 +185,7 @@ pub struct DeviceError {
 }
 
 /// Device error codes.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DeviceErrorCode {
     LowBattery,
     SensorFault,
@@ -214,7 +215,7 @@ pub enum DispatcherState {
     Suspended,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BatchUploadRequest {
     /// Unique id for this batch.
     pub id: BatchId,
@@ -233,7 +234,7 @@ pub struct BatchUploadResponse {
     pub id: BatchId,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct HelloRequest {
     /// Unique id for this dispatcher.
     pub dispatcher_id: DispatcherId,
@@ -241,7 +242,7 @@ pub struct HelloRequest {
     pub location: H3Cell,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct HelloResponse {
     pub dispatcher_id: DispatcherId,
 }
