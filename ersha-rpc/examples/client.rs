@@ -6,7 +6,7 @@ use tracing::{error, info};
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
-        .with_env_filter("tracing=info,client=info")
+        .with_env_filter("tracing=info,client=info,ersha_rpc=debug")
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .init();
 
