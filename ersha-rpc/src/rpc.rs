@@ -2,6 +2,7 @@ use dashmap::DashMap;
 use std::{sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::{
+    io::{BufReader, BufWriter},
     net::TcpStream,
     sync::{mpsc, oneshot},
 };
@@ -26,7 +27,9 @@ pub struct RpcTcp {
 
 impl RpcTcp {
     pub fn new(stream: TcpStream, buffer: usize) -> Self {
-        let (mut reader, mut writer) = stream.into_split();
+        let (reader, writer) = stream.into_split();
+        let mut reader = BufReader::new(reader);
+        let mut writer = BufWriter::new(writer);
 
         let (tx_out, mut rx_out) = mpsc::channel::<Envelope>(buffer);
         let (tx_in, rx_in) = mpsc::channel::<Envelope>(buffer);
@@ -39,19 +42,22 @@ impl RpcTcp {
                     tracing::error!("writer error: {:?}", e);
                     break;
                 }
+                tracing::info!("wrote message: {msg:?}");
             }
         });
 
         let pending_clone = pending.clone();
         tokio::spawn(async move {
             loop {
-                let msg: Envelope = match read_frame(&mut reader).await {
+                let msg = match read_frame(&mut reader).await {
                     Ok(m) => m,
                     Err(e) => {
                         tracing::error!("reader error: {:?}", e);
                         break;
                     }
                 };
+
+                tracing::info!("read message: {msg:?}");
 
                 if let Some(reply_to) = msg.reply_to {
                     if let Some((_, tx)) = pending_clone.remove(&reply_to) {
