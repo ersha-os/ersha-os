@@ -129,7 +129,7 @@ impl DeviceRegistry for SqliteDeviceRegistry {
         let sensor_rows = sqlx::query(
             r#"SELECT id, kind, metric_type, metric_value FROM sensors WHERE device_id = ?"#,
         )
-        .bind(&id.0.to_string())
+        .bind(id.0.to_string())
         .fetch_all(&self.pool)
         .await?;
 
@@ -420,59 +420,59 @@ fn filter_devices<'a>(
         }
     };
 
-    if let Some(ids) = filter.ids {
-        if !ids.is_empty() {
-            prefix(&mut query_builder);
-            query_builder.push("id IN (");
-            let mut separated = query_builder.separated(", ");
-            for id in ids {
-                separated.push_bind(id.0.to_string());
-            }
-            separated.push_unseparated(")");
+    if let Some(ids) = filter.ids
+        && !ids.is_empty()
+    {
+        prefix(&mut query_builder);
+        query_builder.push("id IN (");
+        let mut separated = query_builder.separated(", ");
+        for id in ids {
+            separated.push_bind(id.0.to_string());
         }
+        separated.push_unseparated(")");
     }
 
-    if let Some(states) = filter.states {
-        if !states.is_empty() {
-            prefix(&mut query_builder);
-            query_builder.push("state IN (");
-            let mut separated = query_builder.separated(", ");
-            for state in states {
-                let val = match state {
-                    DeviceState::Active => 0,
-                    DeviceState::Suspended => 1,
-                };
-                separated.push_bind(val);
-            }
-            separated.push_unseparated(")");
+    if let Some(states) = filter.states
+        && !states.is_empty()
+    {
+        prefix(&mut query_builder);
+        query_builder.push("state IN (");
+        let mut separated = query_builder.separated(", ");
+        for state in states {
+            let val = match state {
+                DeviceState::Active => 0,
+                DeviceState::Suspended => 1,
+            };
+            separated.push_bind(val);
         }
+        separated.push_unseparated(")");
     }
 
-    if let Some(kinds) = filter.kinds {
-        if !kinds.is_empty() {
-            prefix(&mut query_builder);
-            query_builder.push("kind IN (");
-            let mut separated = query_builder.separated(", ");
-            for kind in kinds {
-                let val = match kind {
-                    DeviceKind::Sensor => 0,
-                };
-                separated.push_bind(val);
-            }
-            separated.push_unseparated(")");
+    if let Some(kinds) = filter.kinds
+        && !kinds.is_empty()
+    {
+        prefix(&mut query_builder);
+        query_builder.push("kind IN (");
+        let mut separated = query_builder.separated(", ");
+        for kind in kinds {
+            let val = match kind {
+                DeviceKind::Sensor => 0,
+            };
+            separated.push_bind(val);
         }
+        separated.push_unseparated(")");
     }
 
-    if let Some(locations) = filter.locations {
-        if !locations.is_empty() {
-            prefix(&mut query_builder);
-            query_builder.push("location IN (");
-            let mut separated = query_builder.separated(", ");
-            for loc in locations {
-                separated.push_bind(loc.0 as i64);
-            }
-            separated.push_unseparated(")");
+    if let Some(locations) = filter.locations
+        && !locations.is_empty()
+    {
+        prefix(&mut query_builder);
+        query_builder.push("location IN (");
+        let mut separated = query_builder.separated(", ");
+        for loc in locations {
+            separated.push_bind(loc.0 as i64);
         }
+        separated.push_unseparated(")");
     }
 
     if let Some(after) = filter.provisioned_after {

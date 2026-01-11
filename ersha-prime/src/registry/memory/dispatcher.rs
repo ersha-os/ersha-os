@@ -33,15 +33,14 @@ impl DispatcherRegistry for InMemoryDispatcherRegistry {
     async fn suspend(&mut self, id: DispatcherId) -> Result<(), Self::Error> {
         let dispatcher = self.get(id).await?.ok_or(InMemoryError::NotFound)?;
 
-        let _ = self
-            .update(
-                id,
-                Dispatcher {
-                    state: DispatcherState::Suspended,
-                    ..dispatcher
-                },
-            )
-            .await?;
+        self.update(
+            id,
+            Dispatcher {
+                state: DispatcherState::Suspended,
+                ..dispatcher
+            },
+        )
+        .await?;
 
         Ok(())
     }
@@ -87,7 +86,7 @@ fn paginate_dispatchers(dispatchers: Vec<&Dispatcher>, pagination: &Pagination) 
             .collect(),
         Pagination::Cursor { after, limit } => {
             if let Some(inner_ulid) = after {
-                let id = DispatcherId(inner_ulid.clone());
+                let id = DispatcherId(*inner_ulid);
                 return dispatchers
                     .into_iter()
                     .skip_while(|dispatcher| dispatcher.id != id)
@@ -97,7 +96,7 @@ fn paginate_dispatchers(dispatchers: Vec<&Dispatcher>, pagination: &Pagination) 
                     .collect();
             }
 
-            return vec![];
+            vec![]
         }
     }
 }
@@ -125,19 +124,19 @@ fn filter_dispatchers<'a>(
     dispatchers: &'a HashMap<DispatcherId, Dispatcher>,
     filter: &DispatcherFilter,
 ) -> impl Iterator<Item = &'a Dispatcher> {
-    dispatchers.values().filter_map(|dispatcher| {
-        if let Some(locations) = &filter.locations {
-            if !locations.contains(&dispatcher.location) {
-                return None;
-            }
+    dispatchers.values().filter(|dispatcher| {
+        if let Some(locations) = &filter.locations
+            && !locations.contains(&dispatcher.location)
+        {
+            return false;
         }
 
-        if let Some(states) = &filter.states {
-            if !states.contains(&dispatcher.state) {
-                return None;
-            }
+        if let Some(states) = &filter.states
+            && !states.contains(&dispatcher.state)
+        {
+            return false;
         }
 
-        return Some(dispatcher);
+        true
     })
 }

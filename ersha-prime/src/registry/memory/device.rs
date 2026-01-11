@@ -72,15 +72,14 @@ impl DeviceRegistry for InMemoryDeviceRegistry {
     async fn suspend(&mut self, id: DeviceId) -> Result<(), Self::Error> {
         let device = self.get(id).await?.ok_or(InMemoryError::NotFound)?;
 
-        let _ = self
-            .update(
-                id,
-                Device {
-                    state: DeviceState::Suspended,
-                    ..device
-                },
-            )
-            .await?;
+        self.update(
+            id,
+            Device {
+                state: DeviceState::Suspended,
+                ..device
+            },
+        )
+        .await?;
 
         Ok(())
     }
@@ -147,7 +146,7 @@ fn paginate_devices(devices: Vec<&Device>, pagination: &Pagination) -> Vec<Devic
             .collect(),
         Pagination::Cursor { after, limit } => {
             if let Some(inner_ulid) = after {
-                let id = DeviceId(inner_ulid.clone());
+                let id = DeviceId(*inner_ulid);
                 return devices
                     .into_iter()
                     .skip_while(|device| device.id != id)
@@ -157,7 +156,7 @@ fn paginate_devices(devices: Vec<&Device>, pagination: &Pagination) -> Vec<Devic
                     .collect();
             }
 
-            return vec![];
+            vec![]
         }
     }
 }
@@ -166,23 +165,23 @@ fn filter_devices<'a>(
     devices: &'a HashMap<DeviceId, Device>,
     filter: &DeviceFilter,
 ) -> impl Iterator<Item = &'a Device> {
-    devices.values().filter_map(|device| {
-        if let Some(locations) = &filter.locations {
-            if !locations.contains(&device.location) {
-                return None;
-            }
+    devices.values().filter(|device| {
+        if let Some(locations) = &filter.locations
+            && !locations.contains(&device.location)
+        {
+            return false;
         }
 
-        if let Some(states) = &filter.states {
-            if !states.contains(&device.state) {
-                return None;
-            }
+        if let Some(states) = &filter.states
+            && !states.contains(&device.state)
+        {
+            return false;
         }
 
-        if let Some(kinds) = &filter.kinds {
-            if !kinds.contains(&device.kind) {
-                return None;
-            }
+        if let Some(kinds) = &filter.kinds
+            && !kinds.contains(&device.kind)
+        {
+            return false;
         }
 
         if let Some(pattern) = &filter.manufacturer_pattern {
@@ -192,38 +191,38 @@ fn filter_devices<'a>(
                         .to_lowercase()
                         .contains(&pattern.to_lowercase())
                     {
-                        return None;
+                        return false;
                     }
                 }
-                None => return None,
+                None => return false,
             };
         }
 
-        if let Some(sensor_range) = &filter.sensor_count {
-            if !sensor_range.contains(&device.sensors.len()) {
-                return None;
-            }
+        if let Some(sensor_range) = &filter.sensor_count
+            && !sensor_range.contains(&device.sensors.len())
+        {
+            return false;
         }
 
         match (&filter.provisioned_after, &filter.provisioned_before) {
             (None, None) => (),
             (None, Some(before)) => {
                 if &device.provisioned_at > before {
-                    return None;
+                    return false;
                 }
             }
             (Some(after), None) => {
                 if &device.provisioned_at < after {
-                    return None;
+                    return false;
                 }
             }
             (Some(after), Some(before)) => {
                 if &device.provisioned_at < after || &device.provisioned_at > before {
-                    return None;
+                    return false;
                 }
             }
         }
 
-        Some(device)
+        true
     })
 }

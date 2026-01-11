@@ -167,7 +167,7 @@ mod tests {
         let pool = setup_db().await;
         let mut registry = SqliteDispatcherRegistry { pool };
 
-        let ids = vec![Ulid::new(), Ulid::new(), Ulid::new()];
+        let ids = [Ulid::new(), Ulid::new(), Ulid::new()];
         registry
             .batch_register(vec![
                 dispatcher(

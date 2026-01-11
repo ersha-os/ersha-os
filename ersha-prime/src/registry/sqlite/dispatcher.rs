@@ -204,35 +204,35 @@ fn filter_dispatchers(
 ) -> QueryBuilder<Sqlite> {
     let mut has_where = false;
 
-    if let Some(states) = filter.states {
-        if !states.is_empty() {
-            query_builder.push(" WHERE state IN (");
-            let mut separated = query_builder.separated(", ");
-            for state in states {
-                separated.push_bind(state as i32);
-            }
-            separated.push_unseparated(")");
-            has_where = true;
+    if let Some(states) = filter.states
+        && !states.is_empty()
+    {
+        query_builder.push(" WHERE state IN (");
+        let mut separated = query_builder.separated(", ");
+        for state in states {
+            separated.push_bind(state as i32);
         }
+        separated.push_unseparated(")");
+        has_where = true;
     }
 
-    if let Some(locations) = filter.locations {
-        if !locations.is_empty() {
-            if has_where {
-                query_builder.push(" AND ");
-            } else {
-                query_builder.push(" WHERE ");
-            }
-
-            query_builder.push("location IN (");
-
-            let mut separated = query_builder.separated(", ");
-            for location in locations {
-                separated.push_bind(location.0 as i64);
-            }
-
-            separated.push_unseparated(")");
+    if let Some(locations) = filter.locations
+        && !locations.is_empty()
+    {
+        if has_where {
+            query_builder.push(" AND ");
+        } else {
+            query_builder.push(" WHERE ");
         }
+
+        query_builder.push("location IN (");
+
+        let mut separated = query_builder.separated(", ");
+        for location in locations {
+            separated.push_bind(location.0 as i64);
+        }
+
+        separated.push_unseparated(")");
     }
 
     query_builder
