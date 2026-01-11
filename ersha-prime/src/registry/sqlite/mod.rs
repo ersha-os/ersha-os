@@ -5,6 +5,7 @@ mod dispatcher;
 mod tests {
     use ersha_core::Percentage;
     use jiff::Timestamp;
+    use ordered_float::NotNan;
     use ulid::Ulid;
 
     use crate::registry::DeviceRegistry;
@@ -77,7 +78,9 @@ mod tests {
             sensors: vec![Sensor {
                 id: SensorId(Ulid::new()),
                 kind: SensorKind::AirTemp,
-                metric: SensorMetric::AirTemp { value: 22.5 },
+                metric: SensorMetric::AirTemp {
+                    value: NotNan::new(22.5).unwrap(),
+                },
             }]
             .into_boxed_slice(),
         }

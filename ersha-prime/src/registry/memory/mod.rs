@@ -13,6 +13,7 @@ mod tests {
     use ersha_core::SensorKind;
     use ersha_core::SensorMetric;
     use jiff::Timestamp;
+    use ordered_float::NotNan;
     use std::collections::HashMap;
     use ulid::Ulid;
 
@@ -225,7 +226,9 @@ mod tests {
         let sensor = Sensor {
             id: SensorId(Ulid::new()),
             kind: SensorKind::AirTemp,
-            metric: SensorMetric::AirTemp { value: 25.0 },
+            metric: SensorMetric::AirTemp {
+                value: NotNan::new(25.0).unwrap(),
+            },
         };
 
         registry.add_sensor(DeviceId(d_id), sensor).await.unwrap();
@@ -247,7 +250,9 @@ mod tests {
         d2.sensors = vec![Sensor {
             id: SensorId(Ulid::new()),
             kind: SensorKind::Rainfall,
-            metric: SensorMetric::Rainfall { value: 1.0 },
+            metric: SensorMetric::Rainfall {
+                value: NotNan::new(1.0).unwrap(),
+            },
         }]
         .into_boxed_slice();
 
