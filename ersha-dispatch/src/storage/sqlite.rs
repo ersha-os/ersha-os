@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use rusqlite::{Connection, Error as RusqliteError, Row, params};
+use rusqlite::{params, Connection, Error as RusqliteError, Row};
 use serde_json::Error as SerdeJsonError;
 use std::fmt;
 use std::path::Path;

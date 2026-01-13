@@ -1,7 +1,7 @@
 use ersha_core::*;
-use ersha_dispatch::storage::Storage;
 use ersha_dispatch::storage::memory::{MemoryStorage, MemoryStorageError};
 use ersha_dispatch::storage::sqlite::{SqliteStorage, SqliteStorageError};
+use ersha_dispatch::storage::Storage;
 use std::time::Duration;
 use tempfile::NamedTempFile;
 use ulid::Ulid;
