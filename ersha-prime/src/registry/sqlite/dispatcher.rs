@@ -5,8 +5,8 @@ use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 use ulid::Ulid;
 
 use crate::registry::{
-    DispatcherRegistry,
     filter::{DispatcherFilter, DispatcherSortBy, Pagination, QueryOptions, SortOrder},
+    DispatcherRegistry,
 };
 
 #[derive(Debug)]

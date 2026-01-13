@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use ersha_core::{Dispatcher, DispatcherId, DispatcherState};
 
 use crate::registry::{
-    DispatcherRegistry,
     filter::{DispatcherFilter, DispatcherSortBy, Pagination, QueryOptions, SortOrder},
+    DispatcherRegistry,
 };
 
 use super::InMemoryError;

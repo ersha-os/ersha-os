@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use ersha_core::{Device, DeviceId, DeviceState, Sensor};
 
 use crate::registry::{
-    DeviceRegistry,
     filter::{DeviceFilter, DeviceSortBy, Pagination, QueryOptions, SortOrder},
+    DeviceRegistry,
 };
 
 use super::InMemoryError;

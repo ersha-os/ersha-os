@@ -8,8 +8,6 @@ mod tests {
     use ordered_float::NotNan;
     use ulid::Ulid;
 
-    use crate::registry::DeviceRegistry;
-    use crate::registry::DispatcherRegistry;
     use crate::registry::filter::DeviceFilter;
     use crate::registry::filter::DeviceSortBy;
     use crate::registry::filter::{
@@ -17,14 +15,16 @@ mod tests {
     };
     use crate::registry::sqlite::device::SqliteDeviceRegistry;
     use crate::registry::sqlite::dispatcher::SqliteDispatcherRegistry;
+    use crate::registry::DeviceRegistry;
+    use crate::registry::DispatcherRegistry;
     use ersha_core::{
         Device, DeviceId, DeviceKind, DeviceState, Dispatcher, DispatcherId, DispatcherState,
         H3Cell, Sensor, SensorId, SensorKind, SensorMetric,
     };
 
-    use sqlx::SqlitePool;
     use sqlx::migrate::Migrator;
     use sqlx::sqlite::SqlitePoolOptions;
+    use sqlx::SqlitePool;
 
     static MIGRATROR: Migrator = sqlx::migrate!("./migrations");
 
@@ -202,11 +202,9 @@ mod tests {
 
         let results = registry.list(options).await.unwrap();
         assert_eq!(results.len(), 1);
-        assert!(
-            results
-                .iter()
-                .all(|d| d.state != DispatcherState::Suspended)
-        );
+        assert!(results
+            .iter()
+            .all(|d| d.state != DispatcherState::Suspended));
     }
 
     #[tokio::test]
