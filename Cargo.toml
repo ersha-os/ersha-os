@@ -1,14 +1,33 @@
 [workspace]
+members = [
+    "ersha-core",
+    "ersha-dispatch",
+    "ersha-prime",
+    "ersha-rpc",
+    "ersha-dashboard",
+]
 resolver = "3"
-members = ["ersha-core", "ersha-dispatch", "ersha-prime", "ersha-rpc"]
 
-[workspace.dependencies]
-jiff = { version = "0.2.18", features = ["serde"] }
-ulid = { version = "1.2.1", features = ["serde"] }
-tokio = { version = "1", features = ["full", "macros", "rt-multi-thread"] }
-ordered-float = { version = "5.1.0", features = ["serde"] }
+[workspace.dependencies.jiff]
+version = "0.2.18"
+features = ["serde"]
 
-# The profile that 'dist' will build with
+[workspace.dependencies.ordered-float]
+version = "5.1.0"
+features = ["serde"]
+
+[workspace.dependencies.tokio]
+version = "1"
+features = [
+    "full",
+    "macros",
+    "rt-multi-thread",
+]
+
+[workspace.dependencies.ulid]
+version = "1.2.1"
+features = ["serde"]
+
 [profile.dist]
-inherits = "release"
 lto = "thin"
+inherits = "release"
