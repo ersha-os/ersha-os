@@ -5,12 +5,12 @@ use ersha_core::{
     SensorMetric,
 };
 use ordered_float::NotNan;
-use sqlx::{sqlite::SqliteRow, QueryBuilder, Row, Sqlite, SqlitePool};
+use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool, sqlite::SqliteRow};
 use ulid::Ulid;
 
 use crate::registry::{
-    filter::{DeviceFilter, DeviceSortBy, Pagination, QueryOptions, SortOrder},
     DeviceRegistry,
+    filter::{DeviceFilter, DeviceSortBy, Pagination, QueryOptions, SortOrder},
 };
 
 #[derive(Debug)]

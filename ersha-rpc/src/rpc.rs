@@ -7,7 +7,7 @@ use tokio::{
     sync::{mpsc, oneshot},
 };
 
-use crate::{read_frame, write_frame, Envelope, MessageId, WireMessage};
+use crate::{Envelope, MessageId, WireMessage, read_frame, write_frame};
 
 #[derive(Debug, Error)]
 pub enum RpcError {

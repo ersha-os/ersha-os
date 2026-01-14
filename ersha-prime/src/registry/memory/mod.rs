@@ -17,13 +17,13 @@ mod tests {
     use std::collections::HashMap;
     use ulid::Ulid;
 
+    use crate::registry::DeviceRegistry;
+    use crate::registry::DispatcherRegistry;
     use crate::registry::filter::DeviceFilter;
     use crate::registry::filter::DeviceSortBy;
     use crate::registry::filter::{
         DispatcherFilter, DispatcherSortBy, Pagination, QueryOptions, SortOrder,
     };
-    use crate::registry::DeviceRegistry;
-    use crate::registry::DispatcherRegistry;
     use ersha_core::{
         Device, DeviceId, DeviceKind, DeviceState, Dispatcher, DispatcherId, DispatcherState,
         H3Cell,
