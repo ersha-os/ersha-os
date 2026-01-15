@@ -4,7 +4,7 @@ members = [
     "ersha-dispatch",
     "ersha-prime",
     "ersha-rpc",
-    "ersha-dashboard",
+    "ersha-dashboard", "ersha-edge",
 ]
 resolver = "3"
 
