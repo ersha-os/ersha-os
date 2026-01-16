@@ -10,4 +10,3 @@ embassy-executor = "0.9.1"
 embassy-sync = "0.7.2"
 embassy-time = "0.5.0"
 ersha-core = { path = "../ersha-core" } 
-heapless = "0.9.2"
