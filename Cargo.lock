@@ -612,12 +612,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "embassy"
-version = "0.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "902e14c8b21b6f56f8d21a1c5de34aa3423acc61b136e47ec591d0758c3e77be"
-
-[[package]]
 name = "embassy-executor"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -806,7 +800,6 @@ name = "ersha-edge"
 version = "0.1.0"
 dependencies = [
  "defmt",
- "embassy",
  "embassy-executor",
  "embassy-sync",
  "embassy-time",

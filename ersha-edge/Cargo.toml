@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 defmt = "1.0.1"
-embassy = "0.0.0"
 embassy-executor = "0.9.1"
 embassy-sync = "0.7.2"
 embassy-time = "0.5.0"
