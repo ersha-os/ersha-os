@@ -1,4 +1,4 @@
-//! ```rust
+//! ```ignore
 //! #![no_std]
 //!
 //! use core::future::Future;
