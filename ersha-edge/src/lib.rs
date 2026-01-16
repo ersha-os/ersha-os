@@ -1,17 +1,63 @@
+//! ```rust
+//! #![no_std]
+//!
+//! use core::future::Future;
+//! use embassy_executor::Executor;
+//! use embassy_executor::Spawner;
+//! use embassy_time::{Duration, Timer};
+//! use ersha_edge::{Sensor, SensorConfig, SensorError, SensorMetric, sensor_task};
+//! use defmt::info;
+//!
+//! pub struct MySoilSensor;
+//!
+//! impl Sensor for MySoilSensor {
+//!
+//!     fn config(&self) -> SensorConfig {
+//!         SensorConfig {
+//!             kind: ersha_core::SensorKind::SoilMoisture,
+//!             sampling_rate: Duration::from_millis(500),
+//!             calibration_offset: 0.0,
+//!         }
+//!     }
+//!
+//!     async fn read(&self) -> Self::ReadFuture<'_> {
+//!         Ok(SensorMetric::SoilMoisture { value: ersha_core::Percentage(42) })
+//!     }
+//! }
+//!
+//! // Generate an embassy task for the sensor
+//! sensor_task!(soil_task, MySoilSensor);
+//!
+//! // Example of spawning and running the executor
+//! #[embassy_executor::main]
+//! async fn main(spawner: Spawner) {
+//!     static SENSOR: MySoilSensor = MySoilSensor;
+//!
+//!     // Spawn the sensor task
+//!     spawner.spawn(soil_task(&SENSOR)).unwrap();
+//!
+//!     // Start the library's central processing loop
+//!     ersha_edge::start().await;
+//! }
+//! ```
+
 #![no_std]
+#![allow(dead_code)]
 
 use defmt::info;
-use embassy_executor::{SpawnError, Spawner};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::{Channel, Sender};
 use embassy_time::{Duration, Timer};
 use ersha_core::{SensorKind, SensorMetric};
-use heapless::Vec;
 
 #[allow(dead_code)]
 const SENSOR_PER_DEVICE: usize = 8;
 
 static CHANNEL: Channel<CriticalSectionRawMutex, SensorMetric, SENSOR_PER_DEVICE> = Channel::new();
+
+fn sender() -> Sender<'static, CriticalSectionRawMutex, SensorMetric, SENSOR_PER_DEVICE> {
+    CHANNEL.sender()
+}
 
 pub struct SensorConfig {
     pub kind: SensorKind,
@@ -25,26 +71,16 @@ pub enum SensorError {
     InvalidData,
 }
 
-pub trait Sensor {
+pub trait Sensor: Send + Sync {
     fn config(&self) -> SensorConfig;
-    // async fn read(&self) -> Result<SensorMetric, SensorError>;
+    fn read(&self) -> impl Future<Output = Result<SensorMetric, SensorError>>;
 }
 
-pub async fn start(
-    spawner: Spawner,
-    sensors: Vec<&'static dyn Sensor, SENSOR_PER_DEVICE>,
-) -> Result<(), SpawnError> {
-    for sensor in sensors {
-        spawner.spawn(sensor_task(sensor, CHANNEL.sender()))?;
-    }
-
-    info!("All sensor tasks spawned. Waiting for data...");
-
+pub async fn start() {
     let receiver = CHANNEL.receiver();
-    loop {
-        let reading = receiver.receive().await;
 
-        match reading {
+    loop {
+        match receiver.receive().await {
             SensorMetric::SoilMoisture { value } => {
                 info!("LoRaWAN Sending: Soil Moisture {}%", value)
             }
@@ -52,29 +88,62 @@ pub async fn start(
             _ => info!("LoRaWAN Sending: Other metric"),
         }
 
-        Timer::after(Duration::from_millis(100)).await;
+        Timer::after_millis(100).await;
     }
 }
 
-#[embassy_executor::task(pool_size = SENSOR_PER_DEVICE)]
-async fn sensor_task(
-    sensor: &'static dyn Sensor,
-    _sender: Sender<'static, CriticalSectionRawMutex, SensorMetric, SENSOR_PER_DEVICE>,
-) -> ! {
-    let config = sensor.config();
+#[macro_export]
+macro_rules! sensor_task {
+    ($task_name:ident, $sensor_ty:ty) => {
+        #[embassy_executor::task]
+        async fn $task_name(sensor: &'static $sensor_ty) -> ! {
+            let sender = $crate::sender();
 
-    loop {
-        info!("Reading sensor kind: {:?}", config.kind);
+            loop {
+                let config = sensor.config();
+                info!("Reading sensor kind: {:?}", config.kind);
 
-        // match sensor.read().await {
-        //     Ok(reading) => {
-        //         sender.send(reading).await;
-        //     }
-        //     Err(e) => {
-        //         defmt::error!("Sensor Error: {:?}", e);
-        //     }
-        // }
+                match sensor.read().await {
+                    Ok(reading) => {
+                        sender.send(reading).await;
+                    }
+                    Err(e) => {
+                        defmt::error!("Sender Error: {:?}", e);
+                    }
+                }
 
-        Timer::after(config.sampling_rate).await;
+                Timer::after(config.sampling_rate).await;
+            }
+        }
+    };
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use embassy_time::Duration;
+
+    struct MockSoilSensor;
+
+    impl Sensor for MockSoilSensor {
+        fn config(&self) -> SensorConfig {
+            SensorConfig {
+                kind: SensorKind::SoilMoisture,
+                sampling_rate: Duration::from_millis(10),
+                calibration_offset: 0.0,
+            }
+        }
+
+        fn read(&self) -> impl core::future::Future<Output = Result<SensorMetric, SensorError>> {
+            async move {
+                Ok(SensorMetric::SoilMoisture {
+                    value: ersha_core::Percentage(42),
+                })
+            }
+        }
     }
+
+    struct MockAirSensor;
+
+    sensor_task!(soil_task, MockSoilSensor);
 }
