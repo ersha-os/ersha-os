@@ -50,13 +50,13 @@ use embassy_sync::channel::{Channel, Sender};
 use embassy_time::{Duration, Timer};
 use ersha_core::{SensorKind, SensorMetric};
 
-#[allow(dead_code)]
 const SENSOR_PER_DEVICE: usize = 8;
 
-static CHANNEL: Channel<CriticalSectionRawMutex, SensorMetric, SENSOR_PER_DEVICE> = Channel::new();
+static READING_CHANNEL: Channel<CriticalSectionRawMutex, SensorMetric, SENSOR_PER_DEVICE> =
+    Channel::new();
 
 fn sender() -> Sender<'static, CriticalSectionRawMutex, SensorMetric, SENSOR_PER_DEVICE> {
-    CHANNEL.sender()
+    READING_CHANNEL.sender()
 }
 
 pub struct SensorConfig {
@@ -71,24 +71,114 @@ pub enum SensorError {
     InvalidData,
 }
 
-pub trait Sensor: Send + Sync {
+pub trait Sensor {
     fn config(&self) -> SensorConfig;
     fn read(&self) -> impl Future<Output = Result<SensorMetric, SensorError>>;
 }
 
-pub async fn start() {
-    let receiver = CHANNEL.receiver();
+pub enum UplinkError {
+    InvalidAuth,
+}
 
-    loop {
-        match receiver.receive().await {
-            SensorMetric::SoilMoisture { value } => {
-                info!("LoRaWAN Sending: Soil Moisture {}%", value)
-            }
-            SensorMetric::AirTemp { value } => info!("LoRaWAN Sending: Air Temp {} C", value),
-            _ => info!("LoRaWAN Sending: Other metric"),
+pub struct Reading {
+    reading_id: u8, // 1 bytes, we will ahve to generate a real id based on the device id and send it to prime
+    metric: u8, // maps to SensorMetric, we could also use fport here. https://github.com/lora-rs/lora-rs/blob/85906f076a54f90d4f8b39aa14fd554df5e434a6/lorawan-device/src/nb_device/mod.rs#L72
+    sensor_id: u8, // relative to the device_id
+    device_id: u32, // 4 bytes, devaddr
+    value: u32,
+    // we still have 1 more byte to make a full 12 bytes.
+}
+
+impl Reading {
+    pub const BYTE_LEN: usize = 11;
+
+    pub fn new(reading_id: u8, metric: u8, sensor_id: u8, device_id: u32, value: u32) -> Self {
+        Self {
+            reading_id,
+            metric,
+            sensor_id,
+            device_id,
+            value,
         }
+    }
 
-        Timer::after_millis(100).await;
+    pub fn to_bytes(&self) -> [u8; Self::BYTE_LEN] {
+        let mut buf = [0u8; Self::BYTE_LEN];
+
+        buf[0] = self.reading_id;
+        buf[1] = self.metric;
+        buf[2] = self.sensor_id;
+
+        buf[3..7].copy_from_slice(&self.device_id.to_le_bytes());
+
+        buf[7..11].copy_from_slice(&self.value.to_le_bytes());
+
+        buf
+    }
+}
+
+pub trait Uplink {
+    fn send(&self, reading: Reading) -> impl Future<Output = Result<(), UplinkError>>;
+}
+
+pub struct Engine<C: Uplink> {
+    host: C,
+    device_id: u32,
+}
+
+impl<C> Engine<C>
+where
+    C: Uplink,
+{
+    pub fn new(host: C, device_id: u32) -> Self {
+        Self { host, device_id }
+    }
+
+    pub async fn run(self) {
+        let receiver = READING_CHANNEL.receiver();
+        let mut reading_id = 0;
+
+        loop {
+            match receiver.receive().await {
+                SensorMetric::SoilMoisture { value } => {
+                    info!("LoRaWAN Sending: Soil Moisture {}%", value);
+                    let _ = self
+                        .host
+                        .send(Reading {
+                            value: value.0 as u32,
+                            reading_id,
+                            metric: 0, // SoilMoisture { value: Percentage },
+                            sensor_id: 0x12,
+                            device_id: self.device_id,
+                        })
+                        .await;
+
+                    reading_id += 1;
+                }
+                SensorMetric::AirTemp { value } => {
+                    info!("LoRaWAN Sending: Air Temp {} C", value);
+
+                    let _ = self
+                        .host
+                        .send(Reading {
+                            value: value.into_inner() as u32,
+                            reading_id,
+                            metric: 2, // AirTemp { value: NotNan<f64> },
+                            sensor_id: 0x13,
+                            device_id: self.device_id,
+                        })
+                        .await;
+
+                    reading_id += 1;
+                }
+                _ => {
+                    info!("LoRaWAN Sending: Other metric");
+                    todo!("implement other sensor metrics")
+                }
+            }
+
+            Timer::after_millis(100).await;
+        }
     }
 }
 
