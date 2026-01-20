@@ -8,7 +8,7 @@ An affordable, scalable, LoRaWAN-powered platform that helps governments, cooper
 
 ---
 
-### ✨ Key Features
+### Key Features
 
 - Real-time **sensor monitoring**
 - Long-range **LoRaWAN** wireless connectivity (up to 10–15 km in rural areas)
@@ -17,12 +17,12 @@ An affordable, scalable, LoRaWAN-powered platform that helps governments, cooper
 - Scalable: single farm → regional → national deployment
 - Fully open-source & hardware-agnostic
 
-### 🏗️ Architecture
+### Architecture
 
 <center>
 <img alt="LoRaWAN Architecture" src="https://github.com/user-attachments/assets/3224cf56-e945-4c2e-be62-c0ef82d0928c" />
 </center>
 
-### 📄 License
+### License
 
 MIT
