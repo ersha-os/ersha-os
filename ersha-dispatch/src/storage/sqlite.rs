@@ -3,7 +3,6 @@ use sqlx::{Error as SqlxError, Row, SqlitePool};
 use std::path::Path;
 use std::time::Duration;
 
-use crate::storage::migrations::Migrator;
 use crate::storage::{
     CleanupStats, DeviceStatusStorage, SensorReadingsStorage, StorageMaintenance, StorageStats,
 };
@@ -76,7 +75,7 @@ impl SqliteStorage {
 
     /// run database migrations
     async fn run_migrations(pool: &SqlitePool) -> Result<(), SqliteStorageError> {
-        Migrator::run_migrations(pool).await.map_err(|e| {
+        sqlx::migrate!("./migrations").run(pool).await.map_err(|e| {
             SqliteStorageError::SchemaCreationFailed(format!("Migration failed: {}", e))
         })
     }
@@ -100,9 +99,14 @@ impl SqliteStorage {
     }
 
     pub async fn get_version(&self) -> Result<i64, SqliteStorageError> {
-        Migrator::get_version(&self.pool)
+        let row: Option<(i64,)> = sqlx::query_as("SELECT MAX(version) FROM _sqlx_migrations")
+            .fetch_optional(&self.pool)
             .await
-            .map_err(|e| SqliteStorageError::QueryFailed(format!("Failed to get version: {}", e)))
+            .map_err(|e| {
+                SqliteStorageError::QueryFailed(format!("Failed to get version: {}", e))
+            })?;
+
+        Ok(row.map(|(v,)| v).unwrap_or(0))
     }
 
     pub async fn check_schema(&self) -> Result<bool, SqliteStorageError> {

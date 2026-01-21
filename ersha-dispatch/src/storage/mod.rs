@@ -1,5 +1,5 @@
 pub mod memory;
-pub mod migrations;
+
 pub mod sqlite;
 
 use async_trait::async_trait;
