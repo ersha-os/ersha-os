@@ -12,6 +12,7 @@ jiff.workspace = true
 serde_json = "1"
 tokio.workspace = true
 sqlx.workspace = true
+thiserror = "2.0.18"
 
 [dev-dependencies]
 tempfile = "3.24.0"

@@ -1,26 +1,13 @@
 use sqlx::{Error as SqlxError, SqlitePool};
 
-#[derive(Debug)]
+use thiserror::Error;
+
+#[derive(Debug, Error)]
 pub enum MigrationError {
-    Sqlx(SqlxError),
+    #[error("SQLx error: {0}")]
+    Sqlx(#[from] SqlxError),
+    #[error("Version error: {0}")]
     VersionError(String),
-}
-
-impl std::fmt::Display for MigrationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MigrationError::Sqlx(e) => write!(f, "SQLx error: {}", e),
-            MigrationError::VersionError(e) => write!(f, "Version error: {}", e),
-        }
-    }
-}
-
-impl std::error::Error for MigrationError {}
-
-impl From<SqlxError> for MigrationError {
-    fn from(err: SqlxError) -> Self {
-        MigrationError::Sqlx(err)
-    }
 }
 
 pub struct Migrator;
@@ -95,7 +82,6 @@ struct Migration {
 const MIGRATIONS: &[Migration] = &[Migration {
     version: 1,
     sql: r#"
-            -- Core tables for agricultural data
             CREATE TABLE IF NOT EXISTS sensor_readings (
                 id TEXT PRIMARY KEY,
                 reading_json TEXT NOT NULL,
@@ -112,7 +98,6 @@ const MIGRATIONS: &[Migration] = &[Migration {
                 uploaded_at TIMESTAMP
             );
             
-            -- Indexes for common queries
             CREATE INDEX IF NOT EXISTS idx_sensor_readings_state 
             ON sensor_readings(state);
             

@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
@@ -39,20 +38,13 @@ pub struct MemoryStorage {
     device_statuses: Arc<Mutex<HashMap<StatusId, StoredDeviceStatus>>>,
 }
 
+use thiserror::Error;
+
 /// Error type for MemoryStorage
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum MemoryStorageError {
+    #[error("Mutex poisoned: {0}")]
     MutexPoisoned(String),
-}
-
-impl std::error::Error for MemoryStorageError {}
-
-impl fmt::Display for MemoryStorageError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            MemoryStorageError::MutexPoisoned(msg) => write!(f, "Mutex poisoned: {}", msg),
-        }
-    }
 }
 
 impl<T> From<PoisonError<T>> for MemoryStorageError {

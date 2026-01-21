@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use sqlx::{Error as SqlxError, Row, SqlitePool};
-use std::fmt;
 use std::path::Path;
 use std::time::Duration;
 
@@ -15,47 +14,30 @@ pub struct SqliteStorage {
     pool: SqlitePool,
 }
 
-#[derive(Debug)]
+use thiserror::Error;
+
+#[derive(Debug, Error)]
 pub enum SqliteStorageError {
+    #[error("Connection failed: {0}")]
     ConnectionFailed(String),
+    #[error("Schema creation failed: {0}")]
     SchemaCreationFailed(String),
+    #[error("Serialization failed: {0}")]
     SerializationFailed(String),
+    #[error("Deserialization failed: {0}")]
     DeserializationFailed(String),
+    #[error("Query failed: {0}")]
     QueryFailed(String),
+    #[error("Transaction failed: {0}")]
     TransactionFailed(String),
+    #[error("Update failed: {0}")]
     UpdateFailed(String),
+    #[error("Row processing failed: {0}")]
     RowProcessingFailed(String),
+    #[error("Time conversion failed: {0}")]
     TimeConversionFailed(String),
+    #[error("Pool error: {0}")]
     PoolError(String),
-}
-
-impl std::error::Error for SqliteStorageError {}
-
-impl fmt::Display for SqliteStorageError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SqliteStorageError::ConnectionFailed(msg) => write!(f, "Connection failed: {}", msg),
-            SqliteStorageError::SchemaCreationFailed(msg) => {
-                write!(f, "Schema creation failed: {}", msg)
-            }
-            SqliteStorageError::SerializationFailed(msg) => {
-                write!(f, "Serialization failed: {}", msg)
-            }
-            SqliteStorageError::DeserializationFailed(msg) => {
-                write!(f, "Deserialization failed: {}", msg)
-            }
-            SqliteStorageError::QueryFailed(msg) => write!(f, "Query failed: {}", msg),
-            SqliteStorageError::TransactionFailed(msg) => write!(f, "Transaction failed: {}", msg),
-            SqliteStorageError::UpdateFailed(msg) => write!(f, "Update failed: {}", msg),
-            SqliteStorageError::RowProcessingFailed(msg) => {
-                write!(f, "Row processing failed: {}", msg)
-            }
-            SqliteStorageError::TimeConversionFailed(msg) => {
-                write!(f, "Time conversion failed: {}", msg)
-            }
-            SqliteStorageError::PoolError(msg) => write!(f, "Pool error: {}", msg),
-        }
-    }
 }
 
 impl From<SqlxError> for SqliteStorageError {
