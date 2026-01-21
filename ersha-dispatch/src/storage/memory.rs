@@ -6,10 +6,29 @@ use std::time::Duration;
 use async_trait::async_trait;
 use ersha_core::{DeviceStatus, ReadingId, SensorReading, StatusId};
 
-use crate::storage::models::{StorageState, StoredDeviceStatus, StoredSensorReading};
 use crate::storage::{
     CleanupStats, DeviceStatusStorage, SensorReadingsStorage, StorageMaintenance, StorageStats,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StorageState {
+    Pending,
+    Uploaded,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredSensorReading {
+    pub id: ReadingId,
+    pub reading: SensorReading,
+    pub state: StorageState,
+}
+
+#[derive(Debug, Clone)]
+pub struct StoredDeviceStatus {
+    pub id: StatusId,
+    pub status: DeviceStatus,
+    pub state: StorageState,
+}
 
 /// In-memory storage implementation.
 /// This is primarily intended for testing and as a reference
