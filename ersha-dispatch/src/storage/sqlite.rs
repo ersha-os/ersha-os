@@ -829,7 +829,10 @@ mod tests {
         // test 1: Fresh database should be at version 1
         let storage = SqliteStorage::new(db_path).await?;
         let version = storage.get_version().await?;
-        assert_eq!(version, 1, "Fresh database should be at version 1");
+        assert_eq!(
+            version, 20240101000000,
+            "Fresh database should be at version 1"
+        );
 
         // test 2: Schema should be up to date
         let schema_ok = storage.check_schema().await?;
@@ -878,7 +881,7 @@ mod tests {
         let version2 = storage2.get_version().await?;
 
         assert_eq!(version1, version2, "Versions should be consistent");
-        assert_eq!(version1, 1, "Should be at version 1");
+        assert_eq!(version1, 20240101000000);
 
         println!("✅ Migrations are idempotent (safe to run multiple times)");
 
