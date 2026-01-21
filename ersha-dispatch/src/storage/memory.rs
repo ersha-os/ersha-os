@@ -7,7 +7,9 @@ use async_trait::async_trait;
 use ersha_core::{DeviceStatus, ReadingId, SensorReading, StatusId};
 
 use crate::storage::models::{StorageState, StoredDeviceStatus, StoredSensorReading};
-use crate::storage::{CleanupStats, Storage, StorageStats};
+use crate::storage::{
+    CleanupStats, DeviceStatusStorage, SensorReadingsStorage, StorageMaintenance, StorageStats,
+};
 
 /// In-memory storage implementation.
 /// This is primarily intended for testing and as a reference
@@ -41,10 +43,10 @@ impl<T> From<PoisonError<T>> for MemoryStorageError {
 }
 
 #[async_trait]
-impl Storage for MemoryStorage {
+impl SensorReadingsStorage for MemoryStorage {
     type Error = MemoryStorageError;
 
-    async fn store_sensor_reading(&self, reading: SensorReading) -> Result<(), Self::Error> {
+    async fn store(&self, reading: SensorReading) -> Result<(), Self::Error> {
         let mut map = self.sensor_readings.lock()?;
 
         let id = reading.id;
@@ -60,26 +62,7 @@ impl Storage for MemoryStorage {
         Ok(())
     }
 
-    async fn store_device_status(&self, status: DeviceStatus) -> Result<(), Self::Error> {
-        let mut map = self.device_statuses.lock()?;
-
-        let id = status.id;
-        map.insert(
-            id,
-            StoredDeviceStatus {
-                id,
-                status,
-                state: StorageState::Pending,
-            },
-        );
-
-        Ok(())
-    }
-
-    async fn store_sensor_readings_batch(
-        &self,
-        readings: Vec<SensorReading>,
-    ) -> Result<(), Self::Error> {
+    async fn store_batch(&self, readings: Vec<SensorReading>) -> Result<(), Self::Error> {
         let mut map = self.sensor_readings.lock()?;
 
         for reading in readings {
@@ -97,10 +80,50 @@ impl Storage for MemoryStorage {
         Ok(())
     }
 
-    async fn store_device_statuses_batch(
-        &self,
-        statuses: Vec<DeviceStatus>,
-    ) -> Result<(), Self::Error> {
+    async fn fetch_pending(&self) -> Result<Vec<SensorReading>, Self::Error> {
+        let map = self.sensor_readings.lock()?;
+
+        Ok(map
+            .values()
+            .filter(|r| r.state == StorageState::Pending)
+            .map(|r| r.reading.clone())
+            .collect())
+    }
+
+    async fn mark_uploaded(&self, ids: &[ReadingId]) -> Result<(), Self::Error> {
+        let mut map = self.sensor_readings.lock()?;
+
+        for id in ids {
+            if let Some(entry) = map.get_mut(id) {
+                entry.state = StorageState::Uploaded;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl DeviceStatusStorage for MemoryStorage {
+    type Error = MemoryStorageError;
+
+    async fn store(&self, status: DeviceStatus) -> Result<(), Self::Error> {
+        let mut map = self.device_statuses.lock()?;
+
+        let id = status.id;
+        map.insert(
+            id,
+            StoredDeviceStatus {
+                id,
+                status,
+                state: StorageState::Pending,
+            },
+        );
+
+        Ok(())
+    }
+
+    async fn store_batch(&self, statuses: Vec<DeviceStatus>) -> Result<(), Self::Error> {
         let mut map = self.device_statuses.lock()?;
 
         for status in statuses {
@@ -118,17 +141,7 @@ impl Storage for MemoryStorage {
         Ok(())
     }
 
-    async fn fetch_pending_sensor_readings(&self) -> Result<Vec<SensorReading>, Self::Error> {
-        let map = self.sensor_readings.lock()?;
-
-        Ok(map
-            .values()
-            .filter(|r| r.state == StorageState::Pending)
-            .map(|r| r.reading.clone())
-            .collect())
-    }
-
-    async fn fetch_pending_device_statuses(&self) -> Result<Vec<DeviceStatus>, Self::Error> {
+    async fn fetch_pending(&self) -> Result<Vec<DeviceStatus>, Self::Error> {
         let map = self.device_statuses.lock()?;
 
         Ok(map
@@ -138,19 +151,7 @@ impl Storage for MemoryStorage {
             .collect())
     }
 
-    async fn mark_sensor_readings_uploaded(&self, ids: &[ReadingId]) -> Result<(), Self::Error> {
-        let mut map = self.sensor_readings.lock()?;
-
-        for id in ids {
-            if let Some(entry) = map.get_mut(id) {
-                entry.state = StorageState::Uploaded;
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn mark_device_statuses_uploaded(&self, ids: &[StatusId]) -> Result<(), Self::Error> {
+    async fn mark_uploaded(&self, ids: &[StatusId]) -> Result<(), Self::Error> {
         let mut map = self.device_statuses.lock()?;
 
         for id in ids {
@@ -161,6 +162,11 @@ impl Storage for MemoryStorage {
 
         Ok(())
     }
+}
+
+#[async_trait]
+impl StorageMaintenance for MemoryStorage {
+    type Error = MemoryStorageError;
 
     async fn get_stats(&self) -> Result<StorageStats, Self::Error> {
         let sensor_map = self.sensor_readings.lock()?;
@@ -221,5 +227,224 @@ impl Storage for MemoryStorage {
             sensor_readings_deleted,
             device_statuses_deleted,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MemoryStorage, MemoryStorageError};
+    use crate::storage::{DeviceStatusStorage, SensorReadingsStorage, StorageMaintenance};
+    use ersha_core::*;
+    use std::time::Duration;
+    use ulid::Ulid;
+
+    fn dummy_reading() -> SensorReading {
+        SensorReading {
+            id: ReadingId(Ulid::new()),
+            device_id: DeviceId(Ulid::new()),
+            dispatcher_id: DispatcherId(Ulid::new()),
+            metric: SensorMetric::SoilMoisture {
+                value: Percentage(42),
+            },
+            location: H3Cell(123),
+            confidence: Percentage(95),
+            timestamp: jiff::Timestamp::now(),
+            sensor_id: SensorId(Ulid::new()),
+        }
+    }
+
+    fn dummy_status() -> DeviceStatus {
+        DeviceStatus {
+            id: StatusId(Ulid::new()),
+            device_id: DeviceId(Ulid::new()),
+            dispatcher_id: DispatcherId(Ulid::new()),
+            battery_percent: Percentage(85),
+            uptime_seconds: 3600,
+            signal_rssi: -65,
+            errors: Box::new([]),
+            timestamp: jiff::Timestamp::now(),
+            sensor_statuses: Box::new([]),
+        }
+    }
+
+    #[tokio::test]
+    async fn memory_sensor_reading_lifecycle() -> Result<(), MemoryStorageError> {
+        let storage: MemoryStorage = MemoryStorage::default();
+
+        let reading = dummy_reading();
+        let reading_id = reading.id;
+
+        SensorReadingsStorage::store(&storage, reading).await?;
+
+        let pending: Vec<SensorReading> = SensorReadingsStorage::fetch_pending(&storage).await?;
+        assert_eq!(pending.len(), 1);
+
+        SensorReadingsStorage::mark_uploaded(&storage, std::slice::from_ref(&reading_id)).await?;
+
+        let pending: Vec<SensorReading> = SensorReadingsStorage::fetch_pending(&storage).await?;
+        assert_eq!(pending.len(), 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn memory_device_status_lifecycle() -> Result<(), MemoryStorageError> {
+        let storage: MemoryStorage = MemoryStorage::default();
+
+        let status = dummy_status();
+        let status_id = status.id;
+
+        DeviceStatusStorage::store(&storage, status).await?;
+
+        let pending: Vec<DeviceStatus> = DeviceStatusStorage::fetch_pending(&storage).await?;
+        assert_eq!(pending.len(), 1);
+
+        DeviceStatusStorage::mark_uploaded(&storage, std::slice::from_ref(&status_id)).await?;
+
+        let pending: Vec<DeviceStatus> = DeviceStatusStorage::fetch_pending(&storage).await?;
+        assert_eq!(pending.len(), 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn memory_mixed_events() -> Result<(), MemoryStorageError> {
+        let storage: MemoryStorage = MemoryStorage::default();
+
+        let reading = dummy_reading();
+        let status = dummy_status();
+
+        SensorReadingsStorage::store(&storage, reading).await?;
+        DeviceStatusStorage::store(&storage, status).await?;
+
+        let pending_readings: Vec<SensorReading> =
+            SensorReadingsStorage::fetch_pending(&storage).await?;
+        let pending_statuses: Vec<DeviceStatus> =
+            DeviceStatusStorage::fetch_pending(&storage).await?;
+
+        assert_eq!(pending_readings.len(), 1);
+        assert_eq!(pending_statuses.len(), 1);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn memory_batch_sensor_readings() -> Result<(), MemoryStorageError> {
+        let storage: MemoryStorage = MemoryStorage::default();
+
+        let readings = vec![dummy_reading(), dummy_reading(), dummy_reading()];
+
+        SensorReadingsStorage::store_batch(&storage, readings).await?;
+
+        let pending: Vec<SensorReading> = SensorReadingsStorage::fetch_pending(&storage).await?;
+        assert_eq!(pending.len(), 3);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn memory_batch_device_statuses() -> Result<(), MemoryStorageError> {
+        let storage: MemoryStorage = MemoryStorage::default();
+
+        let statuses = vec![dummy_status(), dummy_status()];
+
+        DeviceStatusStorage::store_batch(&storage, statuses).await?;
+
+        let pending: Vec<DeviceStatus> = DeviceStatusStorage::fetch_pending(&storage).await?;
+        assert_eq!(pending.len(), 2);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn memory_get_stats() -> Result<(), MemoryStorageError> {
+        let storage: MemoryStorage = MemoryStorage::default();
+
+        // initial stats should be zero
+        let stats = storage.get_stats().await?;
+        assert_eq!(stats.sensor_readings_total, 0);
+        assert_eq!(stats.device_statuses_total, 0);
+
+        SensorReadingsStorage::store(&storage, dummy_reading()).await?;
+        SensorReadingsStorage::store(&storage, dummy_reading()).await?;
+        DeviceStatusStorage::store(&storage, dummy_status()).await?;
+
+        let stats = storage.get_stats().await?;
+        assert_eq!(stats.sensor_readings_total, 2);
+        assert_eq!(stats.sensor_readings_pending, 2);
+        assert_eq!(stats.sensor_readings_uploaded, 0);
+        assert_eq!(stats.device_statuses_total, 1);
+        assert_eq!(stats.device_statuses_pending, 1);
+        assert_eq!(stats.device_statuses_uploaded, 0);
+
+        let reading = dummy_reading();
+        let reading_id = reading.id;
+        SensorReadingsStorage::store(&storage, reading).await?;
+        SensorReadingsStorage::mark_uploaded(&storage, std::slice::from_ref(&reading_id)).await?;
+
+        let stats = storage.get_stats().await?;
+        assert_eq!(stats.sensor_readings_total, 3);
+        assert_eq!(stats.sensor_readings_pending, 2);
+        assert_eq!(stats.sensor_readings_uploaded, 1);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn memory_cleanup_uploaded() -> Result<(), MemoryStorageError> {
+        let storage: MemoryStorage = MemoryStorage::default();
+
+        // create 3 readings, mark 2 as uploaded
+        let reading1 = dummy_reading();
+        let reading2 = dummy_reading();
+        let reading3 = dummy_reading();
+
+        let id1 = reading1.id;
+        let id2 = reading2.id;
+
+        SensorReadingsStorage::store(&storage, reading1).await?;
+        SensorReadingsStorage::store(&storage, reading2).await?;
+        SensorReadingsStorage::store(&storage, reading3).await?;
+        DeviceStatusStorage::store(&storage, dummy_status()).await?;
+
+        SensorReadingsStorage::mark_uploaded(&storage, &[id1, id2][..]).await?;
+
+        let stats_before = storage.get_stats().await?;
+        assert_eq!(stats_before.sensor_readings_total, 3);
+        assert_eq!(stats_before.sensor_readings_uploaded, 2);
+
+        // cleanup uploaded (memory ignores duration, deletes all uploaded)
+        let cleanup = storage.cleanup_uploaded(Duration::ZERO).await?;
+        assert_eq!(cleanup.sensor_readings_deleted, 2);
+        assert_eq!(cleanup.device_statuses_deleted, 0); // Not uploaded
+
+        // after cleanup
+        let stats_after = storage.get_stats().await?;
+        assert_eq!(stats_after.sensor_readings_total, 1); // Only pending remains
+        assert_eq!(stats_after.sensor_readings_pending, 1);
+        assert_eq!(stats_after.sensor_readings_uploaded, 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn memory_zero_duration_cleanup() -> Result<(), MemoryStorageError> {
+        let storage: MemoryStorage = MemoryStorage::default();
+        let reading = dummy_reading();
+        let reading_id = reading.id;
+        SensorReadingsStorage::store(&storage, reading).await?;
+        SensorReadingsStorage::mark_uploaded(&storage, std::slice::from_ref(&reading_id)).await?;
+
+        // memory backend should also delete all uploaded with zero duration
+        let cleanup = storage.cleanup_uploaded(Duration::ZERO).await?;
+        assert_eq!(cleanup.sensor_readings_deleted, 1);
+        assert_eq!(cleanup.device_statuses_deleted, 0);
+
+        // verify data is deleted
+        let stats = storage.get_stats().await?;
+        assert_eq!(stats.sensor_readings_total, 0);
+        assert_eq!(stats.sensor_readings_uploaded, 0);
+
+        Ok(())
     }
 }

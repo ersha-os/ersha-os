@@ -7,43 +7,49 @@ use async_trait::async_trait;
 use ersha_core::{DeviceStatus, ReadingId, SensorReading, StatusId};
 use std::time::Duration;
 
-/// Storage abstraction for the dispatcher.
-/// This trait defines the minimum set of operations required
-/// to persist events locally and track their upload state.
+/// Storage abstraction for sensor readings.
 #[async_trait]
-pub trait Storage: Send + Sync + 'static {
+pub trait SensorReadingsStorage: Send + Sync + 'static {
     /// Error type specific to this storage implementation
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Store a sensor reading event as pending.
-    async fn store_sensor_reading(&self, reading: SensorReading) -> Result<(), Self::Error>;
-
-    /// Store a device status event as pending.
-    async fn store_device_status(&self, status: DeviceStatus) -> Result<(), Self::Error>;
+    async fn store(&self, reading: SensorReading) -> Result<(), Self::Error>;
 
     /// Store multiple sensor readings in a batch (more efficient).
-    async fn store_sensor_readings_batch(
-        &self,
-        readings: Vec<SensorReading>,
-    ) -> Result<(), Self::Error>;
-
-    /// Store multiple device statuses in a batch (more efficient).
-    async fn store_device_statuses_batch(
-        &self,
-        statuses: Vec<DeviceStatus>,
-    ) -> Result<(), Self::Error>;
+    async fn store_batch(&self, readings: Vec<SensorReading>) -> Result<(), Self::Error>;
 
     /// Fetch all pending sensor readings.
-    async fn fetch_pending_sensor_readings(&self) -> Result<Vec<SensorReading>, Self::Error>;
-
-    /// Fetch all pending device status events.
-    async fn fetch_pending_device_statuses(&self) -> Result<Vec<DeviceStatus>, Self::Error>;
+    async fn fetch_pending(&self) -> Result<Vec<SensorReading>, Self::Error>;
 
     /// Mark sensor readings as successfully uploaded.
-    async fn mark_sensor_readings_uploaded(&self, ids: &[ReadingId]) -> Result<(), Self::Error>;
+    async fn mark_uploaded(&self, ids: &[ReadingId]) -> Result<(), Self::Error>;
+}
+
+/// Storage abstraction for device status events.
+#[async_trait]
+pub trait DeviceStatusStorage: Send + Sync + 'static {
+    /// Error type specific to this storage implementation
+    type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Store a device status event as pending.
+    async fn store(&self, status: DeviceStatus) -> Result<(), Self::Error>;
+
+    /// Store multiple device statuses in a batch (more efficient).
+    async fn store_batch(&self, statuses: Vec<DeviceStatus>) -> Result<(), Self::Error>;
+
+    /// Fetch all pending device status events.
+    async fn fetch_pending(&self) -> Result<Vec<DeviceStatus>, Self::Error>;
 
     /// Mark device status events as successfully uploaded.
-    async fn mark_device_statuses_uploaded(&self, ids: &[StatusId]) -> Result<(), Self::Error>;
+    async fn mark_uploaded(&self, ids: &[StatusId]) -> Result<(), Self::Error>;
+}
+
+/// Storage abstraction for maintenance operations.
+#[async_trait]
+pub trait StorageMaintenance: Send + Sync + 'static {
+    /// Error type specific to this storage implementation
+    type Error: std::error::Error + Send + Sync + 'static;
 
     /// Get statistics about stored data.
     async fn get_stats(&self) -> Result<StorageStats, Self::Error>;
