@@ -4,24 +4,25 @@ use ersha_core::{Dispatcher, DispatcherId, DispatcherState, H3Cell};
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool};
 use ulid::Ulid;
 
+use async_trait::async_trait;
+
 use crate::registry::{
     DispatcherRegistry,
     filter::{DispatcherFilter, DispatcherSortBy, Pagination, QueryOptions, SortOrder},
 };
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SqliteDispatcherError {
-    Sqlx(sqlx::Error),
+    #[error("sqlx error: {0}")]
+    Sqlx(#[from] sqlx::Error),
+    #[error("invalid ULID: {0}")]
     InvalidUlid(String),
+    #[error("invalid timestamp: {0}")]
     InvalidTimestamp(i64),
+    #[error("invalid dispatcher state: {0}")]
     InvalidState(i32),
+    #[error("not found")]
     NotFound,
-}
-
-impl From<sqlx::Error> for SqliteDispatcherError {
-    fn from(e: sqlx::Error) -> Self {
-        Self::Sqlx(e)
-    }
 }
 
 pub struct SqliteDispatcherRegistry {
@@ -34,10 +35,11 @@ impl SqliteDispatcherRegistry {
     }
 }
 
+#[async_trait]
 impl DispatcherRegistry for SqliteDispatcherRegistry {
     type Error = SqliteDispatcherError;
 
-    async fn register(&mut self, dispatcher: Dispatcher) -> Result<(), Self::Error> {
+    async fn register(&self, dispatcher: Dispatcher) -> Result<(), Self::Error> {
         sqlx::query(
             r#"
             INSERT OR REPLACE INTO dispatchers (id, state, location, provisioned_at)
@@ -89,14 +91,14 @@ impl DispatcherRegistry for SqliteDispatcherRegistry {
         .transpose()
     }
 
-    async fn update(&mut self, id: DispatcherId, new: Dispatcher) -> Result<(), Self::Error> {
+    async fn update(&self, id: DispatcherId, new: Dispatcher) -> Result<(), Self::Error> {
         let old = self.get(id).await?.ok_or(SqliteDispatcherError::NotFound)?;
         let new = Dispatcher { id: old.id, ..new };
 
         self.register(new).await
     }
 
-    async fn suspend(&mut self, id: DispatcherId) -> Result<(), Self::Error> {
+    async fn suspend(&self, id: DispatcherId) -> Result<(), Self::Error> {
         let dispatcher = self.get(id).await?.ok_or(SqliteDispatcherError::NotFound)?;
 
         let new = Dispatcher {
@@ -107,7 +109,7 @@ impl DispatcherRegistry for SqliteDispatcherRegistry {
         self.register(new).await
     }
 
-    async fn batch_register(&mut self, dispatchers: Vec<Dispatcher>) -> Result<(), Self::Error> {
+    async fn batch_register(&self, dispatchers: Vec<Dispatcher>) -> Result<(), Self::Error> {
         let mut tx = self.pool.begin().await?;
 
         for dispatcher in dispatchers {

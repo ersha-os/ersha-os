@@ -614,10 +614,12 @@ dependencies = [
 name = "ersha-prime"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "ersha-core",
  "jiff",
  "ordered-float",
  "sqlx",
+ "thiserror 2.0.18",
  "tokio",
  "ulid",
 ]

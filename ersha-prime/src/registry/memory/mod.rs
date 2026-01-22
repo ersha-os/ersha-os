@@ -1,8 +1,9 @@
 mod device;
 mod dispatcher;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum InMemoryError {
+    #[error("not found")]
     NotFound,
 }
 
@@ -59,19 +60,19 @@ mod tests {
 
     fn dispatcher_registry() -> InMemoryDispatcherRegistry {
         InMemoryDispatcherRegistry {
-            dispatchers: HashMap::new(),
+            dispatchers: tokio::sync::RwLock::new(HashMap::new()),
         }
     }
 
     fn device_registry() -> InMemoryDeviceRegistry {
         InMemoryDeviceRegistry {
-            devices: HashMap::new(),
+            devices: tokio::sync::RwLock::new(HashMap::new()),
         }
     }
 
     #[tokio::test]
     async fn test_register_and_get() {
-        let mut reg = dispatcher_registry();
+        let reg = dispatcher_registry();
         let id = DispatcherId(Ulid::new());
         let d = dispatcher(id, DispatcherState::Active, Timestamp::now());
 
@@ -84,7 +85,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_suspend_logic() {
-        let mut reg = dispatcher_registry();
+        let reg = dispatcher_registry();
         let id = DispatcherId(Ulid::new());
         let d = dispatcher(id, DispatcherState::Active, Timestamp::now());
 
@@ -97,7 +98,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_count_with_filter() {
-        let mut reg = dispatcher_registry();
+        let reg = dispatcher_registry();
         let id1 = DispatcherId(Ulid::new());
         let id2 = DispatcherId(Ulid::new());
 
@@ -119,7 +120,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_sorting_and_pagination() {
-        let mut reg = dispatcher_registry();
+        let reg = dispatcher_registry();
 
         // Create 3 dispatchers with distinct timestamps
         let id1 = DispatcherId(Ulid::new());
@@ -165,7 +166,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cursor_pagination() {
-        let mut reg = dispatcher_registry();
+        let reg = dispatcher_registry();
         let id1 = DispatcherId(Ulid::new());
         let id2 = DispatcherId(Ulid::new());
 
@@ -203,7 +204,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_register_and_get_device() {
-        let mut registry = device_registry();
+        let registry = device_registry();
         let id = Ulid::new();
         let device = mock_device(id, "Apple");
 
@@ -215,7 +216,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_sensor() {
-        let mut registry = device_registry();
+        let registry = device_registry();
 
         let d_id = Ulid::new();
         registry
@@ -242,7 +243,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_in_memory_filtering_and_sorting() {
-        let mut registry = device_registry();
+        let registry = device_registry();
 
         let d1 = mock_device(Ulid::new(), "Alpha");
 
@@ -282,7 +283,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_in_memory_pagination_offset() {
-        let mut registry = device_registry();
+        let registry = device_registry();
 
         for i in 0..5 {
             registry
@@ -309,7 +310,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_in_memory_cursor_pagination() {
-        let mut registry = device_registry();
+        let registry = device_registry();
 
         let id1 = Ulid::new();
         let id2 = Ulid::new();

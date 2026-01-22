@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
+use async_trait::async_trait;
 use ersha_core::{Dispatcher, DispatcherId, DispatcherState};
+use tokio::sync::RwLock;
 
 use crate::registry::{
     DispatcherRegistry,
@@ -10,27 +12,31 @@ use crate::registry::{
 use super::InMemoryError;
 
 pub struct InMemoryDispatcherRegistry {
-    pub dispatchers: HashMap<DispatcherId, Dispatcher>,
+    pub dispatchers: RwLock<HashMap<DispatcherId, Dispatcher>>,
 }
 
+#[async_trait]
 impl DispatcherRegistry for InMemoryDispatcherRegistry {
     type Error = InMemoryError;
 
-    async fn register(&mut self, dispatcher: Dispatcher) -> Result<(), Self::Error> {
-        let _ = self.dispatchers.insert(dispatcher.id, dispatcher);
+    async fn register(&self, dispatcher: Dispatcher) -> Result<(), Self::Error> {
+        let mut dispatchers = self.dispatchers.write().await;
+        let _ = dispatchers.insert(dispatcher.id, dispatcher);
         Ok(())
     }
 
     async fn get(&self, id: DispatcherId) -> Result<Option<Dispatcher>, Self::Error> {
-        Ok(self.dispatchers.get(&id).cloned())
+        let dispatchers = self.dispatchers.read().await;
+        Ok(dispatchers.get(&id).cloned())
     }
 
-    async fn update(&mut self, id: DispatcherId, new: Dispatcher) -> Result<(), Self::Error> {
-        let _old = self.dispatchers.insert(id, new);
+    async fn update(&self, id: DispatcherId, new: Dispatcher) -> Result<(), Self::Error> {
+        let mut dispatchers = self.dispatchers.write().await;
+        let _old = dispatchers.insert(id, new);
         Ok(())
     }
 
-    async fn suspend(&mut self, id: DispatcherId) -> Result<(), Self::Error> {
+    async fn suspend(&self, id: DispatcherId) -> Result<(), Self::Error> {
         let dispatcher = self.get(id).await?.ok_or(InMemoryError::NotFound)?;
 
         self.update(
@@ -45,7 +51,7 @@ impl DispatcherRegistry for InMemoryDispatcherRegistry {
         Ok(())
     }
 
-    async fn batch_register(&mut self, dispatchers: Vec<Dispatcher>) -> Result<(), Self::Error> {
+    async fn batch_register(&self, dispatchers: Vec<Dispatcher>) -> Result<(), Self::Error> {
         for dispatcher in dispatchers {
             self.register(dispatcher).await?;
         }
@@ -54,21 +60,23 @@ impl DispatcherRegistry for InMemoryDispatcherRegistry {
     }
 
     async fn count(&self, filter: Option<DispatcherFilter>) -> Result<usize, Self::Error> {
+        let dispatchers = self.dispatchers.read().await;
         if let Some(filter) = filter {
-            let filtered = filter_dispatchers(&self.dispatchers, &filter);
+            let filtered = filter_dispatchers(&dispatchers, &filter);
 
             return Ok(filtered.count());
         }
 
-        Ok(self.dispatchers.len())
+        Ok(dispatchers.len())
     }
 
     async fn list(
         &self,
         options: QueryOptions<DispatcherFilter, DispatcherSortBy>,
     ) -> Result<Vec<Dispatcher>, Self::Error> {
+        let dispatchers = self.dispatchers.read().await;
         let filtered: Vec<&Dispatcher> =
-            filter_dispatchers(&self.dispatchers, &options.filter).collect();
+            filter_dispatchers(&dispatchers, &options.filter).collect();
         let sorted = sort_dispatchers(filtered, &options.sort_by, &options.sort_order);
         let paginated = paginate_dispatchers(sorted, &options.pagination);
 

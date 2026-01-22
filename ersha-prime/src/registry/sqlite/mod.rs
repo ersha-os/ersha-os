@@ -89,7 +89,7 @@ mod tests {
     #[tokio::test]
     async fn test_sqlite_register_and_get() {
         let pool = setup_db().await;
-        let mut registry = SqliteDispatcherRegistry { pool };
+        let registry = SqliteDispatcherRegistry { pool };
 
         let id = DispatcherId(Ulid::new());
         let dispatcher = dispatcher(id, DispatcherState::Active, Timestamp::now());
@@ -104,7 +104,7 @@ mod tests {
     #[tokio::test]
     async fn test_sqlite_list_with_filters() {
         let pool = setup_db().await;
-        let mut registry = SqliteDispatcherRegistry { pool };
+        let registry = SqliteDispatcherRegistry { pool };
 
         let id1 = DispatcherId(Ulid::new());
         let d1 = Dispatcher {
@@ -136,7 +136,7 @@ mod tests {
     #[tokio::test]
     async fn test_sqlite_empty_filter_fields() {
         let pool = setup_db().await;
-        let mut registry = SqliteDispatcherRegistry { pool };
+        let registry = SqliteDispatcherRegistry { pool };
 
         let id = DispatcherId(Ulid::new());
         registry
@@ -168,7 +168,7 @@ mod tests {
     #[tokio::test]
     async fn test_sqlite_multiple_state_filter() {
         let pool = setup_db().await;
-        let mut registry = SqliteDispatcherRegistry { pool };
+        let registry = SqliteDispatcherRegistry { pool };
 
         let ids = [Ulid::new(), Ulid::new(), Ulid::new()];
         registry
@@ -212,7 +212,7 @@ mod tests {
     #[tokio::test]
     async fn test_sqlite_pagination_offset_logic() {
         let pool = setup_db().await;
-        let mut registry = SqliteDispatcherRegistry { pool };
+        let registry = SqliteDispatcherRegistry { pool };
 
         for i in 0..5 {
             let d = dispatcher(
@@ -248,7 +248,7 @@ mod tests {
     #[tokio::test]
     async fn test_sqlite_count_after_suspend() {
         let pool = setup_db().await;
-        let mut registry = SqliteDispatcherRegistry { pool };
+        let registry = SqliteDispatcherRegistry { pool };
         let id = DispatcherId(Ulid::new());
 
         registry
@@ -274,7 +274,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_and_get_device() {
         let pool = setup_db().await;
-        let mut registry = SqliteDeviceRegistry { pool };
+        let registry = SqliteDeviceRegistry { pool };
         let id = Ulid::new();
         let device = mock_device(id);
 
@@ -300,7 +300,7 @@ mod tests {
     #[tokio::test]
     async fn test_filter_by_manufacturer() {
         let pool = setup_db().await;
-        let mut registry = SqliteDeviceRegistry { pool };
+        let registry = SqliteDeviceRegistry { pool };
 
         let mut d1 = mock_device(Ulid::new());
         d1.manufacturer = Some("Apple".to_string().into_boxed_str());
@@ -334,7 +334,7 @@ mod tests {
     #[tokio::test]
     async fn test_suspend_device() {
         let pool = setup_db().await;
-        let mut registry = SqliteDeviceRegistry { pool };
+        let registry = SqliteDeviceRegistry { pool };
 
         let id = Ulid::new();
         let device = mock_device(id);
@@ -349,7 +349,7 @@ mod tests {
     #[tokio::test]
     async fn test_add_sensor_individually() {
         let pool = setup_db().await;
-        let mut registry = SqliteDeviceRegistry { pool };
+        let registry = SqliteDeviceRegistry { pool };
 
         let d_id = Ulid::new();
         let mut device = mock_device(d_id);

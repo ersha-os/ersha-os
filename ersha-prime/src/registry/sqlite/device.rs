@@ -8,27 +8,31 @@ use ordered_float::NotNan;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool, sqlite::SqliteRow};
 use ulid::Ulid;
 
+use async_trait::async_trait;
+
 use crate::registry::{
     DeviceRegistry,
     filter::{DeviceFilter, DeviceSortBy, Pagination, QueryOptions, SortOrder},
 };
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SqliteDeviceError {
-    Sqlx(sqlx::Error),
+    #[error("sqlx error: {0}")]
+    Sqlx(#[from] sqlx::Error),
+    #[error("invalid ULID: {0}")]
     InvalidUlid(String),
+    #[error("invalid timestamp: {0}")]
     InvalidTimestamp(i64),
+    #[error("invalid device state: {0}")]
     InvalidState(i32),
+    #[error("invalid device kind: {0}")]
     InvalidDeviceKind(i32),
+    #[error("invalid metric type: {0}")]
     InvalidMetricType(i32),
+    #[error("invalid sensor kind: {0}")]
     InvalidSensorKind(i32),
+    #[error("not found")]
     NotFound,
-}
-
-impl From<sqlx::Error> for SqliteDeviceError {
-    fn from(e: sqlx::Error) -> Self {
-        Self::Sqlx(e)
-    }
 }
 
 pub struct SqliteDeviceRegistry {
@@ -41,10 +45,11 @@ impl SqliteDeviceRegistry {
     }
 }
 
+#[async_trait]
 impl DeviceRegistry for SqliteDeviceRegistry {
     type Error = SqliteDeviceError;
 
-    async fn register(&mut self, device: Device) -> Result<(), Self::Error> {
+    async fn register(&self, device: Device) -> Result<(), Self::Error> {
         sqlx::query(
             r#"
             INSERT OR REPLACE INTO devices (id, kind, state, location, manufacturer, provisioned_at)
@@ -66,7 +71,7 @@ impl DeviceRegistry for SqliteDeviceRegistry {
         Ok(())
     }
 
-    async fn add_sensor(&mut self, id: DeviceId, sensor: Sensor) -> Result<(), Self::Error> {
+    async fn add_sensor(&self, id: DeviceId, sensor: Sensor) -> Result<(), Self::Error> {
         let (metric_type, metric_value) = disect_metric(sensor.metric);
 
         sqlx::query(
@@ -87,9 +92,9 @@ impl DeviceRegistry for SqliteDeviceRegistry {
     }
 
     async fn add_sensors(
-        &mut self,
+        &self,
         id: DeviceId,
-        sensors: impl Iterator<Item = Sensor>,
+        sensors: impl Iterator<Item = Sensor> + Send,
     ) -> Result<(), Self::Error> {
         let mut tx = self.pool.begin().await?;
 
@@ -205,14 +210,14 @@ impl DeviceRegistry for SqliteDeviceRegistry {
         }))
     }
 
-    async fn update(&mut self, id: DeviceId, new: Device) -> Result<(), Self::Error> {
+    async fn update(&self, id: DeviceId, new: Device) -> Result<(), Self::Error> {
         let old = self.get(id).await?.ok_or(Self::Error::NotFound)?;
         let new = Device { id: old.id, ..new };
 
         self.register(new).await
     }
 
-    async fn suspend(&mut self, id: DeviceId) -> Result<(), Self::Error> {
+    async fn suspend(&self, id: DeviceId) -> Result<(), Self::Error> {
         let device = self.get(id).await?.ok_or(Self::Error::NotFound)?;
 
         let new = Device {
@@ -223,7 +228,7 @@ impl DeviceRegistry for SqliteDeviceRegistry {
         self.register(new).await
     }
 
-    async fn batch_register(&mut self, devices: Vec<Device>) -> Result<(), Self::Error> {
+    async fn batch_register(&self, devices: Vec<Device>) -> Result<(), Self::Error> {
         let mut tx = self.pool.begin().await?;
 
         for device in devices {

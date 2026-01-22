@@ -6,8 +6,10 @@ repository = "https://github.com/ersha-os/ersha-os"
 
 [dependencies]
 ersha-core = { path = "../ersha-core" }
+async-trait.workspace = true
 jiff.workspace = true
 ordered-float.workspace = true
 sqlx.workspace = true
-ulid.workspace = true
+thiserror.workspace = true
 tokio.workspace = true
+ulid.workspace = true

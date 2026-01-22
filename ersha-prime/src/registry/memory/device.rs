@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
+use async_trait::async_trait;
 use ersha_core::{Device, DeviceId, DeviceState, Sensor};
+use tokio::sync::RwLock;
 
 use crate::registry::{
     DeviceRegistry,
@@ -10,24 +12,23 @@ use crate::registry::{
 use super::InMemoryError;
 
 pub struct InMemoryDeviceRegistry {
-    pub devices: HashMap<DeviceId, Device>,
+    pub devices: RwLock<HashMap<DeviceId, Device>>,
 }
 
+#[async_trait]
 impl DeviceRegistry for InMemoryDeviceRegistry {
     type Error = InMemoryError;
 
-    async fn register(&mut self, device: Device) -> Result<(), Self::Error> {
-        let _ = self.devices.insert(device.id, device);
+    async fn register(&self, device: Device) -> Result<(), Self::Error> {
+        let mut devices = self.devices.write().await;
+        let _ = devices.insert(device.id, device);
 
         Ok(())
     }
 
-    async fn add_sensor(&mut self, id: DeviceId, sensor: Sensor) -> Result<(), Self::Error> {
-        let mut device = self
-            .devices
-            .get(&id)
-            .cloned()
-            .ok_or(InMemoryError::NotFound)?;
+    async fn add_sensor(&self, id: DeviceId, sensor: Sensor) -> Result<(), Self::Error> {
+        let mut devices = self.devices.write().await;
+        let mut device = devices.get(&id).cloned().ok_or(InMemoryError::NotFound)?;
 
         device.sensors = device
             .sensors
@@ -36,40 +37,36 @@ impl DeviceRegistry for InMemoryDeviceRegistry {
             .collect::<Box<[Sensor]>>();
 
         let new = Device { ..device };
-        self.devices.insert(id, new);
+        devices.insert(id, new);
         Ok(())
     }
 
     async fn add_sensors(
-        &mut self,
+        &self,
         id: DeviceId,
-        sensors: impl Iterator<Item = Sensor>,
+        sensors: impl Iterator<Item = Sensor> + Send,
     ) -> Result<(), Self::Error> {
-        let mut device = self
-            .devices
-            .get(&id)
-            .cloned()
-            .ok_or(InMemoryError::NotFound)?;
+        let mut devices = self.devices.write().await;
+        let mut device = devices.get(&id).cloned().ok_or(InMemoryError::NotFound)?;
 
-        device.sensors = device
-            .sensors
-            .into_iter()
-            .chain(sensors.into_iter())
-            .collect();
+        device.sensors = device.sensors.into_iter().chain(sensors).collect();
 
+        devices.insert(id, device);
         Ok(())
     }
 
     async fn get(&self, id: DeviceId) -> Result<Option<Device>, Self::Error> {
-        Ok(self.devices.get(&id).cloned())
+        let devices = self.devices.read().await;
+        Ok(devices.get(&id).cloned())
     }
 
-    async fn update(&mut self, id: DeviceId, new: Device) -> Result<(), Self::Error> {
-        let _old = self.devices.insert(id, new);
+    async fn update(&self, id: DeviceId, new: Device) -> Result<(), Self::Error> {
+        let mut devices = self.devices.write().await;
+        let _old = devices.insert(id, new);
         Ok(())
     }
 
-    async fn suspend(&mut self, id: DeviceId) -> Result<(), Self::Error> {
+    async fn suspend(&self, id: DeviceId) -> Result<(), Self::Error> {
         let device = self.get(id).await?.ok_or(InMemoryError::NotFound)?;
 
         self.update(
@@ -84,7 +81,7 @@ impl DeviceRegistry for InMemoryDeviceRegistry {
         Ok(())
     }
 
-    async fn batch_register(&mut self, devices: Vec<Device>) -> Result<(), Self::Error> {
+    async fn batch_register(&self, devices: Vec<Device>) -> Result<(), Self::Error> {
         for device in devices {
             self.register(device).await?;
         }
@@ -93,20 +90,22 @@ impl DeviceRegistry for InMemoryDeviceRegistry {
     }
 
     async fn count(&self, filter: Option<DeviceFilter>) -> Result<usize, Self::Error> {
+        let devices = self.devices.read().await;
         if let Some(filter) = filter {
-            let filtered = filter_devices(&self.devices, &filter);
+            let filtered = filter_devices(&devices, &filter);
 
             return Ok(filtered.count());
         }
 
-        Ok(self.devices.len())
+        Ok(devices.len())
     }
 
     async fn list(
         &self,
         options: QueryOptions<DeviceFilter, DeviceSortBy>,
     ) -> Result<Vec<Device>, Self::Error> {
-        let filtered: Vec<&Device> = filter_devices(&self.devices, &options.filter).collect();
+        let devices = self.devices.read().await;
+        let filtered: Vec<&Device> = filter_devices(&devices, &options.filter).collect();
         let sorted = sort_devices(filtered, &options.sort_by, &options.sort_order);
         let paginated = paginate_devices(sorted, &options.pagination);
 
