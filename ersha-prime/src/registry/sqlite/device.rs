@@ -547,3 +547,140 @@ fn disect_metric(metric: SensorMetric) -> (i32, f64) {
         SensorMetric::Rainfall { value } => (4, value.into_inner()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ersha_core::Percentage;
+    use ordered_float::NotNan;
+    use ulid::Ulid;
+
+    use crate::registry::DeviceRegistry;
+    use crate::registry::filter::{
+        DeviceFilter, DeviceSortBy, Pagination, QueryOptions, SortOrder,
+    };
+    use ersha_core::{
+        Device, DeviceId, DeviceKind, DeviceState, H3Cell, Sensor, SensorId, SensorKind,
+        SensorMetric,
+    };
+
+    use super::SqliteDeviceRegistry;
+
+    fn mock_device(id: Ulid) -> Device {
+        Device {
+            id: DeviceId(id),
+            kind: DeviceKind::Sensor,
+            state: DeviceState::Active,
+            location: H3Cell(0x8a2a1072b59ffff),
+            manufacturer: Some("TestCorp".to_string().into_boxed_str()),
+            provisioned_at: jiff::Timestamp::now(),
+            sensors: vec![Sensor {
+                id: SensorId(Ulid::new()),
+                kind: SensorKind::AirTemp,
+                metric: SensorMetric::AirTemp {
+                    value: NotNan::new(22.5).unwrap(),
+                },
+            }]
+            .into_boxed_slice(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_register_and_get_device() {
+        let registry = SqliteDeviceRegistry::new_in_memory().await.unwrap();
+        let id = Ulid::new();
+        let device = mock_device(id);
+
+        registry
+            .register(device.clone())
+            .await
+            .expect("Should register");
+
+        let fetched = registry
+            .get(DeviceId(id))
+            .await
+            .expect("Should fetch")
+            .expect("Device should exist");
+
+        assert_eq!(fetched.id, device.id);
+        assert_eq!(fetched.manufacturer, device.manufacturer);
+        assert_eq!(fetched.sensors.len(), 1);
+        assert!(
+            matches!(fetched.sensors[0].metric, SensorMetric::AirTemp { value } if value == 22.5)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_filter_by_manufacturer() {
+        let registry = SqliteDeviceRegistry::new_in_memory().await.unwrap();
+
+        let mut d1 = mock_device(Ulid::new());
+        d1.manufacturer = Some("Apple".to_string().into_boxed_str());
+
+        let mut d2 = mock_device(Ulid::new());
+        d2.manufacturer = Some("Banana".to_string().into_boxed_str());
+
+        registry.register(d1).await.unwrap();
+        registry.register(d2).await.unwrap();
+
+        let filter = DeviceFilter {
+            manufacturer_pattern: Some("App".to_string()),
+            ..Default::default()
+        };
+
+        let options = QueryOptions {
+            filter,
+            sort_by: DeviceSortBy::ProvisionAt,
+            sort_order: SortOrder::Asc,
+            pagination: Pagination::Offset {
+                offset: 0,
+                limit: 10,
+            },
+        };
+
+        let results = registry.list(options).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].manufacturer.as_deref(), Some("Apple"));
+    }
+
+    #[tokio::test]
+    async fn test_suspend_device() {
+        let registry = SqliteDeviceRegistry::new_in_memory().await.unwrap();
+
+        let id = Ulid::new();
+        let device = mock_device(id);
+
+        registry.register(device).await.unwrap();
+        registry.suspend(DeviceId(id)).await.unwrap();
+
+        let fetched = registry.get(DeviceId(id)).await.unwrap().unwrap();
+        assert_eq!(fetched.state, DeviceState::Suspended);
+    }
+
+    #[tokio::test]
+    async fn test_add_sensor_individually() {
+        let registry = SqliteDeviceRegistry::new_in_memory().await.unwrap();
+
+        let d_id = Ulid::new();
+        let mut device = mock_device(d_id);
+        device.sensors = vec![].into_boxed_slice(); // Start with none
+
+        registry.register(device).await.unwrap();
+
+        let new_sensor = Sensor {
+            id: SensorId(Ulid::new()),
+            kind: SensorKind::Humidity,
+            metric: SensorMetric::Humidity {
+                value: Percentage(45),
+            },
+        };
+
+        registry
+            .add_sensor(DeviceId(d_id), new_sensor)
+            .await
+            .unwrap();
+
+        let fetched = registry.get(DeviceId(d_id)).await.unwrap().unwrap();
+        assert_eq!(fetched.sensors.len(), 1);
+        assert!(matches!(fetched.sensors[0].kind, SensorKind::Humidity));
+    }
+}
