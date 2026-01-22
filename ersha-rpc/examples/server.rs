@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use ersha_core::{BatchUploadRequest, BatchUploadResponse, HelloRequest, HelloResponse};
 use ersha_rpc::{CancellationToken, Server};
 use tokio::net::TcpListener;
@@ -25,29 +28,52 @@ async fn main() {
         }
     };
 
-    let server = Server::new(listener)
-        .on_ping(|_msg_id, _rpc| async move {
-            info!("received ping, responding with pong");
-        })
-        .on_hello(|hello: HelloRequest, _msg_id, _rpc| async move {
-            info!(
-                "received hello request from dispatcher {:?} at location {:?}",
-                hello.dispatcher_id, hello.location
-            );
+    // Define application state
+    #[derive(Clone)]
+    struct AppState {
+        request_count: Arc<AtomicUsize>,
+    }
 
-            HelloResponse {
-                dispatcher_id: hello.dispatcher_id,
+    let state = AppState {
+        request_count: Arc::new(AtomicUsize::new(0)),
+    };
+
+    let server = Server::new(listener, state)
+        .on_ping(|_msg_id, _rpc, state| {
+            let counter = state.request_count.clone();
+            async move {
+                let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
+                info!("received ping #{}, responding with pong", count);
             }
         })
-        .on_batch_upload(|request: BatchUploadRequest, _msg_id, _rpc| async move {
-            info!(
-                "received batch upload request: batch_id = {:?}, dispatcher_id = {:?}, readings = {}, statuses = {}",
-                request.id,
-                request.dispatcher_id,
-                request.readings.len(),
-                request.statuses.len()
-            );
-            BatchUploadResponse { id: request.id }
+        .on_hello(|hello: HelloRequest, _msg_id, _rpc, state| {
+            let counter = state.request_count.clone();
+            async move {
+                let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
+                info!(
+                    "received hello request #{} from dispatcher {:?} at location {:?}",
+                    count, hello.dispatcher_id, hello.location
+                );
+
+                HelloResponse {
+                    dispatcher_id: hello.dispatcher_id,
+                }
+            }
+        })
+        .on_batch_upload(|request: BatchUploadRequest, _msg_id, _rpc, state| {
+            let counter = state.request_count.clone();
+            async move {
+                let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
+                info!(
+                    "received batch upload request #{}: batch_id = {:?}, dispatcher_id = {:?}, readings = {}, statuses = {}",
+                    count,
+                    request.id,
+                    request.dispatcher_id,
+                    request.readings.len(),
+                    request.statuses.len()
+                );
+                BatchUploadResponse { id: request.id }
+            }
         });
 
     // Set up graceful shutdown on Ctrl+C

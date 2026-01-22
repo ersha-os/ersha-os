@@ -7,26 +7,29 @@ use tokio_util::sync::CancellationToken;
 use crate::{MessageId, RpcTcp, WireMessage};
 use ersha_core::{BatchUploadRequest, BatchUploadResponse, HelloRequest, HelloResponse};
 
-pub type HandlerFn<Req, Res> =
-    Box<dyn Fn(Req, MessageId, &RpcTcp) -> Pin<Box<dyn Future<Output = Res> + Send>> + Send + Sync>;
+pub type HandlerFn<Req, Res, S> = Box<
+    dyn Fn(Req, MessageId, &RpcTcp, &S) -> Pin<Box<dyn Future<Output = Res> + Send>> + Send + Sync,
+>;
 
-pub struct Server {
+pub struct Server<S> {
     listener: TcpListener,
     buffer_size: usize,
-    handlers: ServerHandlers,
+    state: Arc<S>,
+    handlers: ServerHandlers<S>,
 }
 
-struct ServerHandlers {
-    on_ping: Option<HandlerFn<(), ()>>,
-    on_hello: Option<HandlerFn<HelloRequest, HelloResponse>>,
-    on_batch_upload: Option<HandlerFn<BatchUploadRequest, BatchUploadResponse>>,
+struct ServerHandlers<S> {
+    on_ping: Option<HandlerFn<(), (), S>>,
+    on_hello: Option<HandlerFn<HelloRequest, HelloResponse, S>>,
+    on_batch_upload: Option<HandlerFn<BatchUploadRequest, BatchUploadResponse, S>>,
 }
 
-impl Server {
-    pub fn new(listener: TcpListener) -> Self {
+impl<S: Send + Sync + 'static> Server<S> {
+    pub fn new(listener: TcpListener, state: S) -> Self {
         Self {
             listener,
             buffer_size: 1024,
+            state: Arc::new(state),
             handlers: ServerHandlers {
                 on_hello: None,
                 on_ping: None,
@@ -42,39 +45,40 @@ impl Server {
 
     pub fn on_hello<F, Fut>(mut self, handler: F) -> Self
     where
-        F: Fn(HelloRequest, MessageId, &RpcTcp) -> Fut + Send + Sync + 'static,
+        F: Fn(HelloRequest, MessageId, &RpcTcp, &S) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = HelloResponse> + Send + 'static,
     {
-        self.handlers.on_hello = Some(Box::new(move |hello, msg_id, rpc| {
-            Box::pin(handler(hello, msg_id, rpc))
+        self.handlers.on_hello = Some(Box::new(move |hello, msg_id, rpc, state| {
+            Box::pin(handler(hello, msg_id, rpc, state))
         }));
         self
     }
 
     pub fn on_ping<F, Fut>(mut self, handler: F) -> Self
     where
-        F: Fn(MessageId, &RpcTcp) -> Fut + Send + Sync + 'static,
+        F: Fn(MessageId, &RpcTcp, &S) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = ()> + Send + 'static,
     {
-        self.handlers.on_ping = Some(Box::new(move |_, msg_id, rpc| {
-            Box::pin(handler(msg_id, rpc))
+        self.handlers.on_ping = Some(Box::new(move |_, msg_id, rpc, state| {
+            Box::pin(handler(msg_id, rpc, state))
         }));
         self
     }
 
     pub fn on_batch_upload<F, Fut>(mut self, handler: F) -> Self
     where
-        F: Fn(BatchUploadRequest, MessageId, &RpcTcp) -> Fut + Send + Sync + 'static,
+        F: Fn(BatchUploadRequest, MessageId, &RpcTcp, &S) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = BatchUploadResponse> + Send + 'static,
     {
-        self.handlers.on_batch_upload = Some(Box::new(move |request, msg_id, rpc| {
-            Box::pin(handler(request, msg_id, rpc))
+        self.handlers.on_batch_upload = Some(Box::new(move |request, msg_id, rpc, state| {
+            Box::pin(handler(request, msg_id, rpc, state))
         }));
         self
     }
 
     async fn handle_connection(
-        handlers: Arc<ServerHandlers>,
+        handlers: Arc<ServerHandlers<S>>,
+        state: Arc<S>,
         stream: TcpStream,
         buffer_size: usize,
     ) {
@@ -95,7 +99,7 @@ impl Server {
             match payload {
                 WireMessage::Ping => {
                     if let Some(handler) = &handlers.on_ping {
-                        handler((), msg_id, &rpc).await;
+                        handler((), msg_id, &rpc, &state).await;
                     }
                     if let Err(e) = rpc.reply(msg_id, WireMessage::Pong).await {
                         tracing::error!("failed to send Pong reply: {:?}", e);
@@ -103,7 +107,7 @@ impl Server {
                 }
                 WireMessage::HelloRequest(hello) => {
                     if let Some(handler) = &handlers.on_hello {
-                        let response = handler(hello, msg_id, &rpc).await;
+                        let response = handler(hello, msg_id, &rpc, &state).await;
                         if let Err(e) = rpc
                             .reply(msg_id, WireMessage::HelloResponse(response))
                             .await
@@ -116,7 +120,7 @@ impl Server {
                 }
                 WireMessage::BatchUploadRequest(request) => {
                     if let Some(handler) = &handlers.on_batch_upload {
-                        let response = handler(request, msg_id, &rpc).await;
+                        let response = handler(request, msg_id, &rpc, &state).await;
                         if let Err(e) = rpc
                             .reply(msg_id, WireMessage::BatchUploadResponse(response))
                             .await
@@ -145,6 +149,7 @@ impl Server {
 
     pub async fn serve(self, cancel: CancellationToken) {
         let handlers = Arc::new(self.handlers);
+        let state = self.state;
 
         loop {
             tokio::select! {
@@ -157,9 +162,10 @@ impl Server {
                         Ok((stream, addr)) => {
                             tracing::debug!("accepted connection from {:?}", addr);
                             let handlers = handlers.clone();
+                            let state = state.clone();
                             let buffer_size = self.buffer_size;
                             tokio::spawn(async move {
-                                Self::handle_connection(handlers, stream, buffer_size).await;
+                                Self::handle_connection(handlers, state, stream, buffer_size).await;
                             });
                         }
                         Err(e) => {
