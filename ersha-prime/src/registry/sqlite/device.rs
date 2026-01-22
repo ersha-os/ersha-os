@@ -5,7 +5,10 @@ use ersha_core::{
     SensorMetric,
 };
 use ordered_float::NotNan;
-use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool, sqlite::SqliteRow};
+use sqlx::{
+    QueryBuilder, Row, Sqlite, SqlitePool, migrate::Migrator, sqlite::SqlitePoolOptions,
+    sqlite::SqliteRow,
+};
 use ulid::Ulid;
 
 use async_trait::async_trait;
@@ -15,10 +18,14 @@ use crate::registry::{
     filter::{DeviceFilter, DeviceSortBy, Pagination, QueryOptions, SortOrder},
 };
 
+static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
+
 #[derive(Debug, thiserror::Error)]
 pub enum SqliteDeviceError {
     #[error("sqlx error: {0}")]
     Sqlx(#[from] sqlx::Error),
+    #[error("migration error: {0}")]
+    Migration(#[from] sqlx::migrate::MigrateError),
     #[error("invalid ULID: {0}")]
     InvalidUlid(String),
     #[error("invalid timestamp: {0}")]
@@ -36,12 +43,25 @@ pub enum SqliteDeviceError {
 }
 
 pub struct SqliteDeviceRegistry {
-    pub pool: SqlitePool,
+    pool: SqlitePool,
 }
 
 impl SqliteDeviceRegistry {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub async fn new(path: impl AsRef<str>) -> Result<Self, SqliteDeviceError> {
+        let connection_string = format!("sqlite:{}", path.as_ref());
+        let pool = SqlitePoolOptions::new().connect(&connection_string).await?;
+
+        MIGRATOR.run(&pool).await?;
+
+        Ok(Self { pool })
+    }
+
+    pub async fn new_in_memory() -> Result<Self, SqliteDeviceError> {
+        let pool = SqlitePoolOptions::new().connect("sqlite::memory:").await?;
+
+        MIGRATOR.run(&pool).await?;
+
+        Ok(Self { pool })
     }
 }
 

@@ -22,26 +22,6 @@ mod tests {
         H3Cell, Sensor, SensorId, SensorKind, SensorMetric,
     };
 
-    use sqlx::SqlitePool;
-    use sqlx::migrate::Migrator;
-    use sqlx::sqlite::SqlitePoolOptions;
-
-    static MIGRATROR: Migrator = sqlx::migrate!("./migrations");
-
-    async fn setup_db() -> SqlitePool {
-        let pool = SqlitePoolOptions::new()
-            .connect("sqlite::memory:")
-            .await
-            .expect("Failed to create pool");
-
-        MIGRATROR
-            .run(&pool)
-            .await
-            .expect("Failed to run migrations");
-
-        pool
-    }
-
     fn dispatcher(
         id: DispatcherId,
         state: DispatcherState,
@@ -88,8 +68,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sqlite_register_and_get() {
-        let pool = setup_db().await;
-        let registry = SqliteDispatcherRegistry { pool };
+        let registry = SqliteDispatcherRegistry::new_in_memory().await.unwrap();
 
         let id = DispatcherId(Ulid::new());
         let dispatcher = dispatcher(id, DispatcherState::Active, Timestamp::now());
@@ -103,8 +82,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sqlite_list_with_filters() {
-        let pool = setup_db().await;
-        let registry = SqliteDispatcherRegistry { pool };
+        let registry = SqliteDispatcherRegistry::new_in_memory().await.unwrap();
 
         let id1 = DispatcherId(Ulid::new());
         let d1 = Dispatcher {
@@ -135,8 +113,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sqlite_empty_filter_fields() {
-        let pool = setup_db().await;
-        let registry = SqliteDispatcherRegistry { pool };
+        let registry = SqliteDispatcherRegistry::new_in_memory().await.unwrap();
 
         let id = DispatcherId(Ulid::new());
         registry
@@ -167,8 +144,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sqlite_multiple_state_filter() {
-        let pool = setup_db().await;
-        let registry = SqliteDispatcherRegistry { pool };
+        let registry = SqliteDispatcherRegistry::new_in_memory().await.unwrap();
 
         let ids = [Ulid::new(), Ulid::new(), Ulid::new()];
         registry
@@ -211,8 +187,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sqlite_pagination_offset_logic() {
-        let pool = setup_db().await;
-        let registry = SqliteDispatcherRegistry { pool };
+        let registry = SqliteDispatcherRegistry::new_in_memory().await.unwrap();
 
         for i in 0..5 {
             let d = dispatcher(
@@ -247,8 +222,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sqlite_count_after_suspend() {
-        let pool = setup_db().await;
-        let registry = SqliteDispatcherRegistry { pool };
+        let registry = SqliteDispatcherRegistry::new_in_memory().await.unwrap();
         let id = DispatcherId(Ulid::new());
 
         registry
@@ -273,8 +247,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_register_and_get_device() {
-        let pool = setup_db().await;
-        let registry = SqliteDeviceRegistry { pool };
+        let registry = SqliteDeviceRegistry::new_in_memory().await.unwrap();
         let id = Ulid::new();
         let device = mock_device(id);
 
@@ -299,8 +272,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_filter_by_manufacturer() {
-        let pool = setup_db().await;
-        let registry = SqliteDeviceRegistry { pool };
+        let registry = SqliteDeviceRegistry::new_in_memory().await.unwrap();
 
         let mut d1 = mock_device(Ulid::new());
         d1.manufacturer = Some("Apple".to_string().into_boxed_str());
@@ -333,8 +305,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_suspend_device() {
-        let pool = setup_db().await;
-        let registry = SqliteDeviceRegistry { pool };
+        let registry = SqliteDeviceRegistry::new_in_memory().await.unwrap();
 
         let id = Ulid::new();
         let device = mock_device(id);
@@ -348,8 +319,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_sensor_individually() {
-        let pool = setup_db().await;
-        let registry = SqliteDeviceRegistry { pool };
+        let registry = SqliteDeviceRegistry::new_in_memory().await.unwrap();
 
         let d_id = Ulid::new();
         let mut device = mock_device(d_id);
