@@ -1,12 +1,16 @@
 #![no_std]
 
-use defmt::{Format, error, info};
+mod sensor_registry;
+use core::mem::MaybeUninit;
+
+pub use sensor_registry::register_sensor;
+
+use defmt::{Format, error};
 use embassy_net::tcp::State;
 use embassy_net::{IpAddress, IpEndpoint, Stack, tcp::TcpSocket};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::{Channel, Sender};
 use embassy_time::{Duration, Timer};
-use postcard::to_slice;
 use serde::{Deserialize, Serialize};
 
 const READING_QUEUE_DEPTH: usize = 16;
@@ -31,10 +35,43 @@ pub enum SensorMetric {
     Rainfall(u16),
 }
 
-static READING_CHANNEL: Channel<CriticalSectionRawMutex, SensorMetric, READING_QUEUE_DEPTH> =
+pub type DeviceId = u32;
+pub type SensorId = u8;
+pub type ReadingId = u16;
+
+#[derive(Serialize, Deserialize, Format, Clone, Copy)]
+pub struct SensorCapability {
+    pub sensor_id: SensorId,
+    pub metric: SensorMetricKind,
+}
+
+#[derive(Serialize, Deserialize, Format, Clone, Copy)]
+pub enum SensorMetricKind {
+    SoilMoisture,
+    SoilTemp,
+    AirTemp,
+    Humidity,
+    Rainfall,
+}
+
+#[derive(Serialize, Deserialize, Format)]
+pub struct ReadingPacket {
+    pub device_id: DeviceId,
+    pub sensor_id: SensorId,
+    pub reading_id: ReadingId,
+    pub metric: SensorMetric,
+}
+
+#[derive(Clone, Format)]
+pub struct TaggedReading {
+    pub sensor_id: SensorId,
+    pub metric: SensorMetric,
+}
+
+static READING_CHANNEL: Channel<CriticalSectionRawMutex, TaggedReading, READING_QUEUE_DEPTH> =
     Channel::new();
 
-pub fn sender() -> Sender<'static, CriticalSectionRawMutex, SensorMetric, READING_QUEUE_DEPTH> {
+pub fn sender() -> Sender<'static, CriticalSectionRawMutex, TaggedReading, READING_QUEUE_DEPTH> {
     READING_CHANNEL.sender()
 }
 
@@ -62,74 +99,81 @@ pub struct UplinkPacket {
 }
 
 #[derive(Debug, Format)]
-pub enum UplinkError {
+pub enum Error {
     UnableToSend,
     SerializationFailed,
     ServerNotFound,
+    TooManySensors,
 }
 
 pub trait Transport {
-    fn ready(&mut self) -> impl Future<Output = Result<(), UplinkError>>;
-    fn send(
+    /// Called once after network join / connect
+    fn provision(&mut self) -> impl Future<Output = Result<DeviceId, Error>>;
+
+    /// Send device capabilities to the server / network
+    fn announce_sensors(
         &mut self,
-        fport: u8,
-        data: &[u8],
-    ) -> impl core::future::Future<Output = Result<usize, UplinkError>>;
+        device_id: DeviceId,
+        sensors: &[SensorCapability],
+    ) -> impl Future<Output = Result<(), Error>>;
+
+    /// Send a single sensor reading
+    fn send_reading(&mut self, packet: &ReadingPacket) -> impl Future<Output = Result<(), Error>>;
 }
 
 pub struct Engine<T: Transport> {
     transport: T,
-    seq: u8,
+    device_id: DeviceId,
+    reading_seq: ReadingId,
 }
 
 impl<T: Transport> Engine<T> {
-    pub fn new(transport: T) -> Self {
-        Self { transport, seq: 0 }
+    pub async fn new(mut transport: T) -> Result<Self, Error> {
+        let device_id = transport.provision().await?;
+
+        let registry = sensor_registry::SENSOR_REGISTRY.lock().await;
+
+        let mut caps_buf: [MaybeUninit<SensorCapability>; sensor_registry::MAX_SENSORS] =
+            unsafe { MaybeUninit::uninit().assume_init() };
+
+        let mut count = 0;
+
+        for cap in registry.capabilities() {
+            caps_buf[count].write(cap);
+            count += 1;
+        }
+
+        let caps: &[SensorCapability] = unsafe {
+            core::slice::from_raw_parts(caps_buf.as_ptr() as *const SensorCapability, count)
+        };
+
+        transport.announce_sensors(device_id, caps).await?;
+
+        Ok(Self {
+            transport,
+            device_id,
+            reading_seq: 0,
+        })
     }
 
-    pub async fn run(mut self) {
+    pub async fn run(mut self) -> ! {
         let receiver = READING_CHANNEL.receiver();
 
         loop {
-            loop {
-                if let Err(e) = self.transport.ready().await {
-                    error!("Transport not ready: {:?}", e);
-                    Timer::after_secs(5).await;
-                    continue;
-                }
-                break;
+            let reading = receiver.receive().await;
+
+            let packet = ReadingPacket {
+                device_id: self.device_id,
+                sensor_id: reading.sensor_id,
+                reading_id: self.reading_seq,
+                metric: reading.metric,
+            };
+
+            if let Err(e) = self.transport.send_reading(&packet).await {
+                error!("Uplink failed: {:?}", e);
             }
 
-            let metric = receiver.receive().await;
-
-            let fport = match metric {
-                SensorMetric::SoilMoisture(_) => 10,
-                SensorMetric::AirTemp(_) => 11,
-                _ => 1,
-            };
-
-            let packet = UplinkPacket {
-                seq: self.seq,
-                sensor_id: 0x01,
-                metric,
-            };
-
-            let mut buffer = [0u8; 64];
-
-            let encoded = match to_slice(&packet, &mut buffer) {
-                Ok(used_slice) => used_slice,
-                Err(_) => {
-                    error!("Serialization Failed");
-                    continue;
-                }
-            };
-
-            match self.transport.send(fport, encoded).await {
-                Ok(bytes) => info!("Sent {} bytes on FPort {}", bytes, fport),
-                Err(_) => error!("Uplink failed"),
-            }
-
-            self.seq = self.seq.wrapping_add(1);
+            self.reading_seq = self.reading_seq.wrapping_add(1);
             Timer::after_millis(100).await;
         }
     }
@@ -137,20 +181,34 @@ impl<T: Transport> Engine<T> {
 
 #[macro_export]
 macro_rules! sensor_task {
-    ($task_name:ident, $sensor_ty:ty) => {
+    ($task_name:ident, $sensor_ty:ty, $metric_kind:expr) => {
         #[embassy_executor::task]
         async fn $task_name(sensor: &'static $sensor_ty) -> ! {
             let sender = $crate::sender();
+
+            let sensor_id = match $crate::register_sensor($metric_kind).await {
+                Ok(id) => id,
+                Err(e) => {
+                    defmt::error!("Sensor registration failed: {:?}", e);
+                    loop {
+                        embassy_time::Timer::after_secs(10).await;
+                    }
+                }
+            };
 
             loop {
                 let config = sensor.config();
 
                 match sensor.read().await {
                     Ok(reading) => {
-                        // sender.send(reading).await;
+                        let reading = $crate::TaggedReading {
+                            sensor_id,
+                            metric: reading,
+                        };
+
                         if sender.try_send(reading).is_err() {
                             defmt::warn!("Sensor queue full, dropping reading");
-                        }
+                        };
                     }
                     Err(e) => {
                         error!("Sender Error: {:?}", e);
@@ -165,41 +223,80 @@ macro_rules! sensor_task {
 
 pub struct Wifi<'a> {
     socket: TcpSocket<'a>,
+    device_id: Option<DeviceId>,
 }
 
 impl<'a> Wifi<'a> {
-    pub fn new(stack: Stack<'a>, rx_buffer: &'a mut [u8], tx_buffer: &'a mut [u8]) -> Self {
+    pub fn new(stack: Stack<'a>, rx: &'a mut [u8], tx: &'a mut [u8]) -> Self {
         Self {
-            socket: TcpSocket::new(stack, rx_buffer, tx_buffer),
+            socket: TcpSocket::new(stack, rx, tx),
+            device_id: None,
         }
     }
 }
 
-impl<'a> Transport for Wifi<'a> {
-    async fn ready(&mut self) -> Result<(), UplinkError> {
-        if self.socket.state() == State::Established {
-            return Ok(());
+async fn read_exact(socket: &mut TcpSocket<'_>, mut buf: &mut [u8]) -> Result<(), Error> {
+    while !buf.is_empty() {
+        let n = socket.read(buf).await.map_err(|_| Error::UnableToSend)?;
+
+        if n == 0 {
+            return Err(Error::ServerNotFound);
         }
 
-        self.socket.set_timeout(Some(Duration::from_secs(10)));
-        self.socket
-            .connect(SERVER_ADDR)
-            .await
-            .map_err(|_| UplinkError::ServerNotFound)?;
+        buf = &mut buf[n..];
+    }
+    Ok(())
+}
 
+impl<'a> Transport for Wifi<'a> {
+    async fn provision(&mut self) -> Result<DeviceId, Error> {
+        if self.socket.state() != State::Established {
+            self.socket
+                .connect(SERVER_ADDR)
+                .await
+                .map_err(|_| Error::ServerNotFound)?;
+        }
+
+        self.socket
+            .write(b"HELLO")
+            .await
+            .map_err(|_| Error::UnableToSend)?;
+
+        let mut buf = [0u8; 4];
+        read_exact(&mut self.socket, &mut buf)
+            .await
+            .map_err(|_| Error::UnableToSend)?;
+
+        let id = u32::from_be_bytes(buf);
+        self.device_id = Some(id);
+        Ok(id)
+    }
+
+    async fn announce_sensors(
+        &mut self,
+        device_id: DeviceId,
+        sensors: &[SensorCapability],
+    ) -> Result<(), Error> {
+        let mut buf = [0u8; 64];
+        let used = postcard::to_slice(&(device_id, sensors), &mut buf)
+            .map_err(|_| Error::SerializationFailed)?;
+
+        self.socket
+            .write(used)
+            .await
+            .map_err(|_| Error::UnableToSend)?;
         Ok(())
     }
 
-    async fn send(&mut self, _fport: u8, data: &[u8]) -> Result<usize, UplinkError> {
-        let mut written = 0;
-        while written < data.len() {
-            written += self
-                .socket
-                .write(&data[written..])
-                .await
-                .map_err(|_| UplinkError::UnableToSend)?;
-        }
-        Ok(written)
+    async fn send_reading(&mut self, packet: &ReadingPacket) -> Result<(), Error> {
+        let mut buf = [0u8; 64];
+        let used = postcard::to_slice(packet, &mut buf).map_err(|_| Error::SerializationFailed)?;
+
+        self.socket
+            .write(used)
+            .await
+            .map_err(|_| Error::UnableToSend)?;
+        Ok(())
     }
 }
 
@@ -224,7 +321,5 @@ mod tests {
         }
     }
 
-    struct MockAirSensor;
-
-    sensor_task!(soil_task, MockSoilSensor);
+    sensor_task!(soil_task, MockSoilSensor, SensorMetricKind::SoilMoisture);
 }
