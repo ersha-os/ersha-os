@@ -50,7 +50,6 @@ impl Sensor for MockSoilMoistureSensor {
     fn config(&self) -> SensorConfig {
         SensorConfig {
             sampling_rate: Duration::from_secs(1),
-            calibration_offset: 0.0,
         }
     }
 

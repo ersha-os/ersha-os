@@ -80,7 +80,7 @@ macro_rules! sensor_task {
                     Ok(reading) => {
                         let reading = $crate::TaggedReading {
                             sensor_id,
-                            metric: reading.calibrate(config.calibration_offset),
+                            metric: reading,
                         };
 
                         if sender.try_send(reading).is_err() {
@@ -112,7 +112,6 @@ mod tests {
         fn config(&self) -> SensorConfig {
             SensorConfig {
                 sampling_rate: Duration::from_millis(10),
-                calibration_offset: 0,
             }
         }
 
@@ -129,7 +128,6 @@ mod tests {
         fn config(&self) -> SensorConfig {
             SensorConfig {
                 sampling_rate: Duration::from_millis(10),
-                calibration_offset: 0,
             }
         }
 
@@ -146,7 +144,6 @@ mod tests {
         fn config(&self) -> SensorConfig {
             SensorConfig {
                 sampling_rate: Duration::from_millis(10),
-                calibration_offset: 0,
             }
         }
 

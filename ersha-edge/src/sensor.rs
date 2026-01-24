@@ -54,7 +54,6 @@ impl SensorMetric {
 
 pub struct SensorConfig {
     pub sampling_rate: Duration,
-    pub calibration_offset: i16,
 }
 
 pub trait Sensor {
