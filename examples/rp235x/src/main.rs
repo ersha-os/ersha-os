@@ -17,7 +17,13 @@ use embassy_time::{Duration, Timer};
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
-use ersha_edge::{Engine, Sensor, SensorConfig, SensorError, SensorMetric, Wifi, sensor_task};
+use ersha_edge::{
+    Engine, Sensor, SensorMetric,
+    sensor::{SensorConfig, SensorError},
+    sensor_task,
+    transport::Wifi,
+
+};
 
 const WIFI_NETWORK: &str = "A";
 const WIFI_PASSWORD: &str = "123r5678i879";
@@ -50,6 +56,7 @@ impl Sensor for MockSoilMoistureSensor {
     fn config(&self) -> SensorConfig {
         SensorConfig {
             sampling_rate: Duration::from_secs(1),
+            sensor_id: 1,
         }
     }
 
@@ -58,7 +65,23 @@ impl Sensor for MockSoilMoistureSensor {
     }
 }
 
+pub struct MockTempSensor;
+
+impl Sensor for MockTempSensor {
+    fn config(&self) -> SensorConfig {
+        SensorConfig {
+            sampling_rate: Duration::from_secs(5),
+            sensor_id: 2,
+        }
+    }
+
+    async fn read(&self) -> Result<SensorMetric, SensorError> {
+        Ok(SensorMetric::AirTemp(12))
+    }
+}
+
 sensor_task!(soil_moisture, MockSoilMoistureSensor);
+sensor_task!(air_temperature, MockTempSensor);
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -126,10 +149,11 @@ async fn main(spawner: Spawner) {
     let tx_buffer = TX_BUFFER.init([0; 4096]);
 
     let wifi = Wifi::new(stack, rx_buffer, tx_buffer);
-    let engine = Engine::new(wifi);
+    let engine = Engine::new(wifi).await.unwrap();
 
-    spawner.spawn(unwrap!(ersha_wifi(engine)));
     spawner.spawn(unwrap!(soil_moisture(&MockSoilMoistureSensor)));
+    spawner.spawn(unwrap!(air_temperature(&MockTempSensor)));
+    spawner.spawn(unwrap!(ersha_wifi(engine)));
 
     let delay = Duration::from_millis(250);
     loop {
