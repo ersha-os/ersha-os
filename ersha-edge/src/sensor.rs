@@ -3,6 +3,8 @@ use embassy_time::Duration;
 use defmt::Format;
 use serde::{Deserialize, Serialize};
 
+use crate::SensorId;
+
 #[derive(defmt::Format)]
 pub enum SensorError {
     Timeout,
@@ -54,6 +56,7 @@ impl SensorMetric {
 
 pub struct SensorConfig {
     pub sampling_rate: Duration,
+    pub sensor_id: SensorId,
 }
 
 pub trait Sensor {

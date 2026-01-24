@@ -39,22 +39,17 @@ pub enum Error {
 
 #[macro_export]
 macro_rules! sensor_task {
-    ($task_name:ident, $sensor_ty:ty, $metric_kind:expr) => {
+    ($task_name:ident, $sensor_ty:ty) => {
         #[embassy_executor::task]
         async fn $task_name(sensor: &'static $sensor_ty) -> ! {
-            use defmt::error;
-            use embassy_time::Timer;
-
-            let sender = $crate::sender();
-
+            let sender = $crate::engine::sender();
+            let config = sensor.config();
 
             loop {
-                let config = sensor.config();
-
                 match sensor.read().await {
                     Ok(reading) => {
                         let reading = $crate::TaggedReading {
-                            sensor_id,
+                            sensor_id: config.sensor_id,
                             metric: reading,
                         };
 
@@ -63,11 +58,11 @@ macro_rules! sensor_task {
                         };
                     }
                     Err(e) => {
-                        error!("Sender Error: {:?}", e);
+                        defmt::error!("Sender Error: {:?}", e);
                     }
                 }
 
-                Timer::after(config.sampling_rate).await;
+                embassy_time::Timer::after(config.sampling_rate).await;
             }
         }
     };
@@ -87,6 +82,7 @@ mod tests {
         fn config(&self) -> SensorConfig {
             SensorConfig {
                 sampling_rate: Duration::from_millis(10),
+                sensor_id: 1,
             }
         }
 
@@ -103,6 +99,7 @@ mod tests {
         fn config(&self) -> SensorConfig {
             SensorConfig {
                 sampling_rate: Duration::from_millis(10),
+                sensor_id: 2,
             }
         }
 
@@ -119,6 +116,7 @@ mod tests {
         fn config(&self) -> SensorConfig {
             SensorConfig {
                 sampling_rate: Duration::from_millis(10),
+                sensor_id: 3,
             }
         }
 
