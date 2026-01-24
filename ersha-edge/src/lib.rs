@@ -1,8 +1,5 @@
 #![no_std]
 
-mod sensor_registry;
-use sensor::SensorMetric;
-pub use sensor_registry::register_sensor;
 
 mod engine;
 pub use engine::*;
@@ -75,15 +72,6 @@ macro_rules! sensor_task {
 
             let sender = $crate::sender();
 
-            let sensor_id = match $crate::register_sensor($metric_kind).await {
-                Ok(id) => id,
-                Err(e) => {
-                    defmt::error!("Sensor registration failed: {:?}", e);
-                    loop {
-                        embassy_time::Timer::after_secs(10).await;
-                    }
-                }
-            };
 
             loop {
                 let config = sensor.config();

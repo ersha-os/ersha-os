@@ -1,12 +1,9 @@
 use crate::DeviceId;
 use crate::Error;
-use crate::MaybeUninit;
 use crate::ReadingId;
 use crate::ReadingPacket;
-use crate::SensorCapability;
 use crate::TaggedReading;
 use crate::Transport;
-use crate::sensor_registry;
 
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
@@ -29,24 +26,6 @@ pub struct Engine<T: Transport> {
 impl<T: Transport> Engine<T> {
     pub async fn new(mut transport: T) -> Result<Self, Error> {
         let device_id = transport.provision().await?;
-
-        let registry = sensor_registry::SENSOR_REGISTRY.lock().await;
-
-        let mut caps_buf: [MaybeUninit<SensorCapability>; sensor_registry::MAX_SENSORS] =
-            unsafe { MaybeUninit::uninit().assume_init() };
-
-        let mut count = 0;
-
-        for cap in registry.capabilities() {
-            caps_buf[count].write(cap);
-            count += 1;
-        }
-
-        let caps: &[SensorCapability] = unsafe {
-            core::slice::from_raw_parts(caps_buf.as_ptr() as *const SensorCapability, count)
-        };
-
-        transport.announce_sensors(device_id, caps).await?;
 
         Ok(Self {
             transport,
