@@ -1,15 +1,12 @@
 #![no_std]
 
+pub mod engine;
+pub mod sensor;
+pub mod transport;
 
-mod engine;
-pub use engine::*;
-
-mod transport;
-pub use transport::*;
-
-mod sensor;
-
-use core::mem::MaybeUninit;
+pub use engine::Engine;
+pub use sensor::{Sensor, SensorMetric};
+pub use transport::Transport;
 
 use defmt::Format;
 use serde::{Deserialize, Serialize};
