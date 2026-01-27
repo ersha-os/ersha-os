@@ -5,11 +5,11 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 
-use std::sync::atomic::{AtomicU32, Ordering};
-
-use ersha_edge::{H3Cell, ReadingPacket, transport::{Msg, MsgType, PACKET_PREAMBLE}};
-
-static NEXT_DEVICE_ID: AtomicU32 = AtomicU32::new(1);
+use ersha_edge::{
+    H3Cell, ReadingPacket,
+    transport::{Msg, MsgType, PACKET_PREAMBLE},
+};
+use ulid::Ulid;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -19,7 +19,6 @@ async fn main() -> io::Result<()> {
     println!("Listening on {:?}...", addr);
 
     while let Ok((stream, _)) = listener.accept().await {
-
         tokio::spawn(async move {
             if let Err(e) = handle_client(stream).await {
                 eprintln!("Client error: {:?}", e);
@@ -46,8 +45,8 @@ async fn handle_client(mut stream: TcpStream) -> io::Result<()> {
 
     let location: H3Cell = u64::from_be_bytes(location);
 
-    let device_id = NEXT_DEVICE_ID.fetch_add(1, Ordering::Relaxed);
-    stream.write_all(&device_id.to_be_bytes()).await?;
+    let device_id = Ulid::new();
+    stream.write_all(&device_id.0.to_be_bytes()).await?;
     println!("Assigned device_id={}", device_id);
 
     let mut buf: Vec<u8> = Vec::with_capacity(1024);
@@ -103,7 +102,6 @@ async fn handle_client(mut stream: TcpStream) -> io::Result<()> {
                                 continue;
                             }
                         };
-
 
                         println!(
                             "[device {} location {}] sensor {} reading {} => {:?}",
