@@ -12,6 +12,7 @@ use ersha_prime::{
         memory::{InMemoryDeviceRegistry, InMemoryDispatcherRegistry},
         sqlite::{SqliteDeviceRegistry, SqliteDispatcherRegistry},
     },
+    AppState,  // Import AppState from lib.rs
 };
 use ersha_rpc::Server;
 use tokio::net::TcpListener;
@@ -26,12 +27,6 @@ struct Cli {
     /// Path to the configuration file
     #[arg(short, long, default_value = "ersha-prime.toml")]
     config: PathBuf,
-}
-
-#[derive(Clone)]
-pub struct AppState<DR, DisR> {
-    pub device_registry: DR,
-    pub dispatcher_registry: DisR,
 }
 
 #[tokio::main]
