@@ -269,6 +269,52 @@ pub async fn delete_device(
     }
 }
 
+// Add a sensor to a device
+pub async fn add_sensor(
+    Path(id): Path<String>,
+    State(state): State<AppState<impl DeviceRegistry, impl crate::registry::DispatcherRegistry>>,
+    Json(payload): Json<SensorCreateRequest>,
+) -> impl IntoResponse {
+    let device_id = match parse_device_id(&id) {
+        Ok(id) => id,
+        Err(message) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()> {
+                    success: false,
+                    data: None,
+                    message: Some(message),
+                }),
+            );
+        }
+    };
+
+    let sensor = Sensor {
+        id: SensorId(Ulid::new()),
+        kind: payload.kind,
+        metric: payload.metric.into(),
+    };
+
+    match state.device_registry.add_sensor(device_id, sensor).await {
+        Ok(_) => (
+            StatusCode::CREATED,
+            Json(ApiResponse::<()> {
+                success: true,
+                data: None,
+                message: Some("Sensor added successfully".to_string()),
+            }),
+        ),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                message: Some(format!("Failed to add sensor: {}", e)),
+            }),
+        ),
+    }
+}
+
 // Helper function to parse DeviceId from string
 fn parse_device_id(id: &str) -> Result<DeviceId, String> {
     Ulid::from_str(id)
