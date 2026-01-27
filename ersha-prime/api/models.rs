@@ -70,6 +70,53 @@ pub enum SensorMetricResponse {
     Rainfall { value: f64 },
 }
 
+// Dispatcher Request/Response Models
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DispatcherCreateRequest {
+    pub location: H3Cell,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DispatcherUpdateRequest {
+    pub state: Option<DispatcherState>,
+    pub location: Option<H3Cell>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DispatcherResponse {
+    pub id: String,
+    pub state: DispatcherState,
+    pub location: H3Cell,
+    pub provisioned_at: String,
+}
+
+// Device Status Models
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeviceStatusResponse {
+    pub id: String,
+    pub device_id: String,
+    pub dispatcher_id: String,
+    pub battery_percent: u8,
+    pub uptime_seconds: u64,
+    pub signal_rssi: i16,
+    pub errors: Vec<DeviceErrorResponse>,
+    pub timestamp: String,
+    pub sensor_statuses: Vec<SensorStatusResponse>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeviceErrorResponse {
+    pub code: DeviceErrorCode,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SensorStatusResponse {
+    pub sensor_id: String,
+    pub state: SensorState,
+    pub last_reading: Option<String>,
+}
+
 // Helper conversions
 impl From<SensorMetricRequest> for ersha_core::SensorMetric {
     fn from(req: SensorMetricRequest) -> Self {
