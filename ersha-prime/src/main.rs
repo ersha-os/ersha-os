@@ -5,6 +5,7 @@ use axum::{Router, routing::get};
 use clap::Parser;
 use ersha_core::{Dispatcher, DispatcherState, HelloRequest, HelloResponse};
 use ersha_prime::{
+    AppState, // Import AppState from lib.rs
     api,
     config::{Config, RegistryConfig},
     registry::{
@@ -12,7 +13,6 @@ use ersha_prime::{
         memory::{InMemoryDeviceRegistry, InMemoryDispatcherRegistry},
         sqlite::{SqliteDeviceRegistry, SqliteDispatcherRegistry},
     },
-    AppState,  // Import AppState from lib.rs
 };
 use ersha_rpc::Server;
 use tokio::net::TcpListener;
@@ -57,13 +57,25 @@ async fn main() -> color_eyre::Result<()> {
             info!("Using in-memory registries");
             let device_registry = InMemoryDeviceRegistry::new();
             let dispatcher_registry = InMemoryDispatcherRegistry::new();
-            run_server(device_registry, dispatcher_registry, config.server.rpc_addr, config.server.http_addr).await?;
+            run_server(
+                device_registry,
+                dispatcher_registry,
+                config.server.rpc_addr,
+                config.server.http_addr,
+            )
+            .await?;
         }
         RegistryConfig::Sqlite { path } => {
             info!(path = ?path, "Using SQLite registries");
             let device_registry = SqliteDeviceRegistry::new(path.to_string_lossy()).await?;
             let dispatcher_registry = SqliteDispatcherRegistry::new(path.to_string_lossy()).await?;
-            run_server(device_registry, dispatcher_registry, config.server.rpc_addr, config.server.http_addr).await?;
+            run_server(
+                device_registry,
+                dispatcher_registry,
+                config.server.rpc_addr,
+                config.server.http_addr,
+            )
+            .await?;
         }
     }
 

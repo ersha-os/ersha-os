@@ -1,14 +1,14 @@
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use std::str::FromStr;
 use ulid::Ulid;
 
-use ersha_core::{Device, DeviceId, DeviceState, Sensor, SensorId};
 use crate::registry::DeviceRegistry;
+use ersha_core::{Device, DeviceId, DeviceState, Sensor, SensorId};
 
 use super::models::{
     ApiResponse, DeviceCreateRequest, DeviceResponse, DeviceUpdateRequest, ListQueryParams,
@@ -56,7 +56,11 @@ fn error_response(status: StatusCode, message: String) -> Response {
 }
 
 // Helper to create success response
-fn success_response<T: serde::Serialize>(status: StatusCode, data: T, message: Option<String>) -> Response {
+fn success_response<T: serde::Serialize>(
+    status: StatusCode,
+    data: T,
+    message: Option<String>,
+) -> Response {
     let api_response = ApiResponse {
         success: true,
         data: Some(data),
@@ -86,14 +90,12 @@ where
 
     let list_result = state.device_registry.list(options).await;
     let count_result = state.device_registry.count(None).await;
-    
+
     match (list_result, count_result) {
         (Ok(devices), Ok(total)) => {
-            let responses: Vec<DeviceResponse> = devices
-                .into_iter()
-                .map(device_to_response)
-                .collect();
-            
+            let responses: Vec<DeviceResponse> =
+                devices.into_iter().map(device_to_response).collect();
+
             let response = ListResponse {
                 items: responses,
                 total,
@@ -101,15 +103,13 @@ where
                 per_page: params.limit,
                 has_more: total > params.offset.unwrap_or(0) + params.limit.unwrap_or(50),
             };
-            
+
             success_response(StatusCode::OK, response, None)
         }
-        (Err(e), _) | (_, Err(e)) => {
-            error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to list devices: {}", e)
-            )
-        }
+        (Err(e), _) | (_, Err(e)) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list devices: {}", e),
+        ),
     }
 }
 
@@ -130,18 +130,12 @@ where
     };
 
     match state.device_registry.get(device_id).await {
-        Ok(Some(device)) => {
-            success_response(StatusCode::OK, device_to_response(device), None)
-        }
-        Ok(None) => {
-            error_response(StatusCode::NOT_FOUND, "Device not found".to_string())
-        }
-        Err(e) => {
-            error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to get device: {}", e)
-            )
-        }
+        Ok(Some(device)) => success_response(StatusCode::OK, device_to_response(device), None),
+        Ok(None) => error_response(StatusCode::NOT_FOUND, "Device not found".to_string()),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get device: {}", e),
+        ),
     }
 }
 
@@ -174,19 +168,15 @@ where
     };
 
     match state.device_registry.register(device.clone()).await {
-        Ok(_) => {
-            success_response(
-                StatusCode::CREATED, 
-                device_to_response(device), 
-                Some("Device created successfully".to_string())
-            )
-        }
-        Err(e) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                format!("Failed to create device: {}", e)
-            )
-        }
+        Ok(_) => success_response(
+            StatusCode::CREATED,
+            device_to_response(device),
+            Some("Device created successfully".to_string()),
+        ),
+        Err(e) => error_response(
+            StatusCode::BAD_REQUEST,
+            format!("Failed to create device: {}", e),
+        ),
     }
 }
 
@@ -220,31 +210,27 @@ where
                 ..existing
             };
 
-            match state.device_registry.update(device_id, updated.clone()).await {
-                Ok(_) => {
-                    success_response(
-                        StatusCode::OK,
-                        device_to_response(updated),
-                        Some("Device updated successfully".to_string())
-                    )
-                }
-                Err(e) => {
-                    error_response(
-                        StatusCode::BAD_REQUEST,
-                        format!("Failed to update device: {}", e)
-                    )
-                }
+            match state
+                .device_registry
+                .update(device_id, updated.clone())
+                .await
+            {
+                Ok(_) => success_response(
+                    StatusCode::OK,
+                    device_to_response(updated),
+                    Some("Device updated successfully".to_string()),
+                ),
+                Err(e) => error_response(
+                    StatusCode::BAD_REQUEST,
+                    format!("Failed to update device: {}", e),
+                ),
             }
         }
-        Ok(None) => {
-            error_response(StatusCode::NOT_FOUND, "Device not found".to_string())
-        }
-        Err(e) => {
-            error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to get device: {}", e)
-            )
-        }
+        Ok(None) => error_response(StatusCode::NOT_FOUND, "Device not found".to_string()),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get device: {}", e),
+        ),
     }
 }
 
@@ -265,19 +251,15 @@ where
     };
 
     match state.device_registry.suspend(device_id).await {
-        Ok(_) => {
-            success_response(
-                StatusCode::OK,
-                (),
-                Some("Device suspended successfully".to_string())
-            )
-        }
-        Err(e) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                format!("Failed to suspend device: {}", e)
-            )
-        }
+        Ok(_) => success_response(
+            StatusCode::OK,
+            (),
+            Some("Device suspended successfully".to_string()),
+        ),
+        Err(e) => error_response(
+            StatusCode::BAD_REQUEST,
+            format!("Failed to suspend device: {}", e),
+        ),
     }
 }
 
@@ -305,18 +287,14 @@ where
     };
 
     match state.device_registry.add_sensor(device_id, sensor).await {
-        Ok(_) => {
-            success_response(
-                StatusCode::CREATED,
-                (),
-                Some("Sensor added successfully".to_string())
-            )
-        }
-        Err(e) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                format!("Failed to add sensor: {}", e)
-            )
-        }
+        Ok(_) => success_response(
+            StatusCode::CREATED,
+            (),
+            Some("Sensor added successfully".to_string()),
+        ),
+        Err(e) => error_response(
+            StatusCode::BAD_REQUEST,
+            format!("Failed to add sensor: {}", e),
+        ),
     }
 }

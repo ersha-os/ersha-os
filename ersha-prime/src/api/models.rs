@@ -1,13 +1,9 @@
-use std::str::FromStr;
-
-use serde::{Deserialize, Serialize};
 use ersha_core::{
-    DeviceKind, DeviceState, DispatcherState, H3Cell, 
-    SensorKind, SensorMetric, Percentage, SensorState, DeviceErrorCode
+    DeviceErrorCode, DeviceKind, DeviceState, DispatcherState, H3Cell, Percentage, SensorKind,
+    SensorState,
 };
-use jiff::Timestamp;
-use ulid::Ulid;
 use ordered_float::NotNan;
+use serde::{Deserialize, Serialize};
 
 // Device Request/Response Models
 #[derive(Debug, Serialize, Deserialize)]
@@ -151,26 +147,21 @@ pub struct ListQueryParams {
 impl From<SensorMetricRequest> for ersha_core::SensorMetric {
     fn from(req: SensorMetricRequest) -> Self {
         match req {
-            SensorMetricRequest::SoilMoisture { value } => 
-                ersha_core::SensorMetric::SoilMoisture { 
-                    value: Percentage(value) 
-                },
-            SensorMetricRequest::SoilTemp { value } => 
-                ersha_core::SensorMetric::SoilTemp { 
-                    value: NotNan::new(value).expect("Invalid NaN value") 
-                },
-            SensorMetricRequest::AirTemp { value } => 
-                ersha_core::SensorMetric::AirTemp { 
-                    value: NotNan::new(value).expect("Invalid NaN value") 
-                },
-            SensorMetricRequest::Humidity { value } => 
-                ersha_core::SensorMetric::Humidity { 
-                    value: Percentage(value) 
-                },
-            SensorMetricRequest::Rainfall { value } => 
-                ersha_core::SensorMetric::Rainfall { 
-                    value: NotNan::new(value).expect("Invalid NaN value") 
-                },
+            SensorMetricRequest::SoilMoisture { value } => ersha_core::SensorMetric::SoilMoisture {
+                value: Percentage(value),
+            },
+            SensorMetricRequest::SoilTemp { value } => ersha_core::SensorMetric::SoilTemp {
+                value: NotNan::new(value).expect("Invalid NaN value"),
+            },
+            SensorMetricRequest::AirTemp { value } => ersha_core::SensorMetric::AirTemp {
+                value: NotNan::new(value).expect("Invalid NaN value"),
+            },
+            SensorMetricRequest::Humidity { value } => ersha_core::SensorMetric::Humidity {
+                value: Percentage(value),
+            },
+            SensorMetricRequest::Rainfall { value } => ersha_core::SensorMetric::Rainfall {
+                value: NotNan::new(value).expect("Invalid NaN value"),
+            },
         }
     }
 }
@@ -178,16 +169,21 @@ impl From<SensorMetricRequest> for ersha_core::SensorMetric {
 impl From<ersha_core::SensorMetric> for SensorMetricResponse {
     fn from(metric: ersha_core::SensorMetric) -> Self {
         match metric {
-            ersha_core::SensorMetric::SoilMoisture { value } => 
-                SensorMetricResponse::SoilMoisture { value: value.0 },
-            ersha_core::SensorMetric::SoilTemp { value } => 
-                SensorMetricResponse::SoilTemp { value: value.into_inner() },
-            ersha_core::SensorMetric::AirTemp { value } => 
-                SensorMetricResponse::AirTemp { value: value.into_inner() },
-            ersha_core::SensorMetric::Humidity { value } => 
-                SensorMetricResponse::Humidity { value: value.0 },
-            ersha_core::SensorMetric::Rainfall { value } => 
-                SensorMetricResponse::Rainfall { value: value.into_inner() },
+            ersha_core::SensorMetric::SoilMoisture { value } => {
+                SensorMetricResponse::SoilMoisture { value: value.0 }
+            }
+            ersha_core::SensorMetric::SoilTemp { value } => SensorMetricResponse::SoilTemp {
+                value: value.into_inner(),
+            },
+            ersha_core::SensorMetric::AirTemp { value } => SensorMetricResponse::AirTemp {
+                value: value.into_inner(),
+            },
+            ersha_core::SensorMetric::Humidity { value } => {
+                SensorMetricResponse::Humidity { value: value.0 }
+            }
+            ersha_core::SensorMetric::Rainfall { value } => SensorMetricResponse::Rainfall {
+                value: value.into_inner(),
+            },
         }
     }
 }

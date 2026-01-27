@@ -1,20 +1,22 @@
 use axum::{
+    Json,
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use std::str::FromStr;
 use ulid::Ulid;
 
-use ersha_core::{Dispatcher, DispatcherId, DispatcherState};
 use crate::registry::DispatcherRegistry;
+use ersha_core::{Dispatcher, DispatcherId, DispatcherState};
 
 use super::models::{
     ApiResponse, DispatcherCreateRequest, DispatcherResponse, DispatcherUpdateRequest,
     ListQueryParams, ListResponse,
 };
-use crate::registry::filter::{DispatcherFilter, DispatcherSortBy, Pagination, QueryOptions, SortOrder};
+use crate::registry::filter::{
+    DispatcherFilter, DispatcherSortBy, Pagination, QueryOptions, SortOrder,
+};
 
 // Helper function to parse DispatcherId from string
 fn parse_dispatcher_id(id: &str) -> Result<DispatcherId, String> {
@@ -44,7 +46,11 @@ fn error_response(status: StatusCode, message: String) -> Response {
 }
 
 // Helper to create success response
-fn success_response<T: serde::Serialize>(status: StatusCode, data: T, message: Option<String>) -> Response {
+fn success_response<T: serde::Serialize>(
+    status: StatusCode,
+    data: T,
+    message: Option<String>,
+) -> Response {
     let api_response = ApiResponse {
         success: true,
         data: Some(data),
@@ -74,14 +80,14 @@ where
 
     let list_result = state.dispatcher_registry.list(options).await;
     let count_result = state.dispatcher_registry.count(None).await;
-    
+
     match (list_result, count_result) {
         (Ok(dispatchers), Ok(total)) => {
             let responses: Vec<DispatcherResponse> = dispatchers
                 .into_iter()
                 .map(dispatcher_to_response)
                 .collect();
-            
+
             let response = ListResponse {
                 items: responses,
                 total,
@@ -89,15 +95,13 @@ where
                 per_page: params.limit,
                 has_more: total > params.offset.unwrap_or(0) + params.limit.unwrap_or(50),
             };
-            
+
             success_response(StatusCode::OK, response, None)
         }
-        (Err(e), _) | (_, Err(e)) => {
-            error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to list dispatchers: {}", e)
-            )
-        }
+        (Err(e), _) | (_, Err(e)) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list dispatchers: {}", e),
+        ),
     }
 }
 
@@ -121,15 +125,11 @@ where
         Ok(Some(dispatcher)) => {
             success_response(StatusCode::OK, dispatcher_to_response(dispatcher), None)
         }
-        Ok(None) => {
-            error_response(StatusCode::NOT_FOUND, "Dispatcher not found".to_string())
-        }
-        Err(e) => {
-            error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to get dispatcher: {}", e)
-            )
-        }
+        Ok(None) => error_response(StatusCode::NOT_FOUND, "Dispatcher not found".to_string()),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get dispatcher: {}", e),
+        ),
     }
 }
 
@@ -150,19 +150,15 @@ where
     };
 
     match state.dispatcher_registry.register(dispatcher.clone()).await {
-        Ok(_) => {
-            success_response(
-                StatusCode::CREATED,
-                dispatcher_to_response(dispatcher),
-                Some("Dispatcher created successfully".to_string())
-            )
-        }
-        Err(e) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                format!("Failed to create dispatcher: {}", e)
-            )
-        }
+        Ok(_) => success_response(
+            StatusCode::CREATED,
+            dispatcher_to_response(dispatcher),
+            Some("Dispatcher created successfully".to_string()),
+        ),
+        Err(e) => error_response(
+            StatusCode::BAD_REQUEST,
+            format!("Failed to create dispatcher: {}", e),
+        ),
     }
 }
 
@@ -191,31 +187,27 @@ where
                 ..existing
             };
 
-            match state.dispatcher_registry.update(dispatcher_id, updated.clone()).await {
-                Ok(_) => {
-                    success_response(
-                        StatusCode::OK,
-                        dispatcher_to_response(updated),
-                        Some("Dispatcher updated successfully".to_string())
-                    )
-                }
-                Err(e) => {
-                    error_response(
-                        StatusCode::BAD_REQUEST,
-                        format!("Failed to update dispatcher: {}", e)
-                    )
-                }
+            match state
+                .dispatcher_registry
+                .update(dispatcher_id, updated.clone())
+                .await
+            {
+                Ok(_) => success_response(
+                    StatusCode::OK,
+                    dispatcher_to_response(updated),
+                    Some("Dispatcher updated successfully".to_string()),
+                ),
+                Err(e) => error_response(
+                    StatusCode::BAD_REQUEST,
+                    format!("Failed to update dispatcher: {}", e),
+                ),
             }
         }
-        Ok(None) => {
-            error_response(StatusCode::NOT_FOUND, "Dispatcher not found".to_string())
-        }
-        Err(e) => {
-            error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to get dispatcher: {}", e)
-            )
-        }
+        Ok(None) => error_response(StatusCode::NOT_FOUND, "Dispatcher not found".to_string()),
+        Err(e) => error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get dispatcher: {}", e),
+        ),
     }
 }
 
@@ -236,18 +228,14 @@ where
     };
 
     match state.dispatcher_registry.suspend(dispatcher_id).await {
-        Ok(_) => {
-            success_response(
-                StatusCode::OK,
-                (),
-                Some("Dispatcher suspended successfully".to_string())
-            )
-        }
-        Err(e) => {
-            error_response(
-                StatusCode::BAD_REQUEST,
-                format!("Failed to suspend dispatcher: {}", e)
-            )
-        }
+        Ok(_) => success_response(
+            StatusCode::OK,
+            (),
+            Some("Dispatcher suspended successfully".to_string()),
+        ),
+        Err(e) => error_response(
+            StatusCode::BAD_REQUEST,
+            format!("Failed to suspend dispatcher: {}", e),
+        ),
     }
 }
