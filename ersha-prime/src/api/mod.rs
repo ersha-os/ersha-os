@@ -5,12 +5,10 @@ pub mod error;
 
 use axum::{
     Router,
-    routing::{get, post, put, delete},
+    routing::{get, post},  // Removed unused put and delete
 };
 
-use crate::AppState;
-
-pub fn router<DR, DisR>() -> Router<AppState<DR, DisR>>
+pub fn router<DR, DisR>() -> Router<crate::AppState<DR, DisR>>
 where
     DR: crate::registry::DeviceRegistry + Clone + Send + Sync + 'static,
     DisR: crate::registry::DispatcherRegistry + Clone + Send + Sync + 'static,
