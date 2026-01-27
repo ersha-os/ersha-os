@@ -23,6 +23,8 @@ cortex-m-rt = "0.7.0"
 cortex-m = { version = "0.7.6", features = ["inline-asm"] }
 embassy-net = { version = "0.8.0", features = ["defmt", "tcp", "dhcpv4", "dns", "proto-ipv4"] }
 
+ulid = { version = "1.2.1", default-features = false }
+
 # TODO: update once there is a new release of embassy
 # ref: https://github.com/embassy-rs/embassy/issues/4842
 [patch.crates-io]

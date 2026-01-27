@@ -7,7 +7,7 @@ use tokio::{
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use ersha_edge::{ReadingPacket, transport::{Msg, MsgType, PACKET_PREAMBLE}};
+use ersha_edge::{H3Cell, ReadingPacket, transport::{Msg, MsgType, PACKET_PREAMBLE}};
 
 static NEXT_DEVICE_ID: AtomicU32 = AtomicU32::new(1);
 
@@ -15,7 +15,6 @@ static NEXT_DEVICE_ID: AtomicU32 = AtomicU32::new(1);
 async fn main() -> io::Result<()> {
     let addr = "0.0.0.0:9001";
     let listener = TcpListener::bind(addr).await?;
-
 
     println!("Listening on {:?}...", addr);
 
@@ -41,6 +40,11 @@ async fn handle_client(mut stream: TcpStream) -> io::Result<()> {
         println!("Invalid handshake");
         return Ok(());
     }
+
+    let mut location = [0u8; 8];
+    stream.read_exact(&mut location).await?;
+
+    let location: H3Cell = u64::from_be_bytes(location);
 
     let device_id = NEXT_DEVICE_ID.fetch_add(1, Ordering::Relaxed);
     stream.write_all(&device_id.to_be_bytes()).await?;
@@ -102,8 +106,9 @@ async fn handle_client(mut stream: TcpStream) -> io::Result<()> {
 
 
                         println!(
-                            "[device {}] sensor {} reading {} => {:?}",
+                            "[device {} location {}] sensor {} reading {} => {:?}",
                             packet.device_id,
+                            location,
                             packet.sensor_id,
                             packet.reading_id,
                             packet.metric

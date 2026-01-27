@@ -16,6 +16,7 @@ use embassy_rp::{
 use embassy_time::{Duration, Timer};
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
+use ulid::Ulid;
 
 use ersha_edge::{
     Engine, Sensor, SensorMetric,
@@ -56,7 +57,7 @@ impl Sensor for MockSoilMoistureSensor {
     fn config(&self) -> SensorConfig {
         SensorConfig {
             sampling_rate: Duration::from_secs(1),
-            sensor_id: 1,
+            sensor_id: Ulid::from_string("01KFYZ55B89WQPZKGB0T0BX5TW").expect("invalid ulid"),
         }
     }
 
@@ -71,7 +72,7 @@ impl Sensor for MockTempSensor {
     fn config(&self) -> SensorConfig {
         SensorConfig {
             sampling_rate: Duration::from_secs(5),
-            sensor_id: 2,
+            sensor_id: Ulid::from_string("01KFYZM2RTK13ZHE0478EPZ1AT").expect("invalid ulid"),
         }
     }
 
@@ -149,7 +150,7 @@ async fn main(spawner: Spawner) {
     let tx_buffer = TX_BUFFER.init([0; 4096]);
 
     let wifi = Wifi::new(stack, rx_buffer, tx_buffer);
-    let engine = Engine::new(wifi).await.unwrap();
+    let engine = Engine::new(wifi, 0x887ade7255fffff).await.unwrap();
 
     spawner.spawn(unwrap!(soil_moisture(&MockSoilMoistureSensor)));
     spawner.spawn(unwrap!(air_temperature(&MockTempSensor)));

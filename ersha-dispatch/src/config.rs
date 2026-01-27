@@ -52,6 +52,9 @@ pub enum EdgeConfig {
         /// Number of simulated devices
         device_count: usize,
     },
+    Tcp {
+        addr: SocketAddr,
+    },
 }
 
 impl Config {

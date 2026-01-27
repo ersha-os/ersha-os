@@ -11,9 +11,10 @@ pub use transport::Transport;
 use defmt::Format;
 use serde::{Deserialize, Serialize};
 
-pub type DeviceId = u32;
-pub type SensorId = u8;
+pub type DeviceId = u128;
+pub type SensorId = u128;
 pub type ReadingId = u16;
+pub type H3Cell = u64;
 
 #[derive(Serialize, Deserialize, Format)]
 pub struct ReadingPacket {
@@ -49,7 +50,7 @@ macro_rules! sensor_task {
                 match sensor.read().await {
                     Ok(reading) => {
                         let reading = $crate::TaggedReading {
-                            sensor_id: config.sensor_id,
+                            sensor_id: config.sensor_id.into(),
                             metric: reading,
                         };
 
@@ -71,10 +72,11 @@ macro_rules! sensor_task {
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
+    use super::*;
     use crate::sensor::{Sensor, SensorConfig, SensorError};
 
-    use super::*;
     use embassy_time::Duration;
+    use ulid::Ulid;
 
     struct MockSoilSensor;
 
@@ -82,7 +84,7 @@ mod tests {
         fn config(&self) -> SensorConfig {
             SensorConfig {
                 sampling_rate: Duration::from_millis(10),
-                sensor_id: 1,
+                sensor_id: Ulid::from_string("01KFYZSR0DB1WQKGNZ09WDD29N").expect("invalid ulid"),
             }
         }
 
@@ -99,7 +101,7 @@ mod tests {
         fn config(&self) -> SensorConfig {
             SensorConfig {
                 sampling_rate: Duration::from_millis(10),
-                sensor_id: 2,
+                sensor_id: Ulid::from_string("01KFYZSR0DB1WQKGNZ09WDD29N").expect("invalid ulid"),
             }
         }
 
@@ -116,7 +118,7 @@ mod tests {
         fn config(&self) -> SensorConfig {
             SensorConfig {
                 sampling_rate: Duration::from_millis(10),
-                sensor_id: 3,
+                sensor_id: Ulid::from_string("01KFYZSR0DB1WQKGNZ09WDD29N").expect("invalid ulid"),
             }
         }
 

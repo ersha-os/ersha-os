@@ -7,6 +7,7 @@ repository = "https://github.com/ersha-os/ersha-os"
 [dependencies]
 ersha-core = { path = "../ersha-core" }
 ersha-rpc = { path = "../ersha-rpc" }
+ersha-edge = { path = "../ersha-edge" }
 async-trait.workspace = true
 axum.workspace = true
 clap.workspace = true
@@ -24,5 +25,6 @@ toml.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 ulid.workspace = true
+postcard.workspace = true
 
 [dev-dependencies]

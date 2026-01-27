@@ -1,9 +1,4 @@
-use crate::DeviceId;
-use crate::Error;
-use crate::ReadingId;
-use crate::ReadingPacket;
-use crate::TaggedReading;
-use crate::Transport;
+use crate::{DeviceId, Error, H3Cell, ReadingId, ReadingPacket, TaggedReading, Transport};
 
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
@@ -24,8 +19,8 @@ pub struct Engine<T: Transport> {
 }
 
 impl<T: Transport> Engine<T> {
-    pub async fn new(mut transport: T) -> Result<Self, Error> {
-        let device_id = transport.provision().await?;
+    pub async fn new(mut transport: T, location: H3Cell) -> Result<Self, Error> {
+        let device_id = transport.provision(location).await?;
 
         Ok(Self {
             transport,

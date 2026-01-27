@@ -1,4 +1,5 @@
 pub mod mock;
+pub mod tcp;
 
 use async_trait::async_trait;
 use ersha_core::{DeviceStatus, SensorReading};

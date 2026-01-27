@@ -10,4 +10,5 @@ embassy-sync = "0.7.2"
 embassy-time = "0.5.0"
 embassy-net = { version = "0.8.0", features = ["defmt", "tcp", "dhcpv4", "dns", "proto-ipv4"] }
 serde = { version = "1.0.228", default-features = false }
-postcard = "1.1.3"
+postcard.workspace = true
+ulid = { version = "1.2.1", default-features = false }
