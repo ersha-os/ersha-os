@@ -115,6 +115,160 @@ pub async fn get_device(
     }
 }
 
+// Create a new device
+pub async fn create_device(
+    State(state): State<AppState<impl DeviceRegistry, impl crate::registry::DispatcherRegistry>>,
+    Json(payload): Json<DeviceCreateRequest>,
+) -> impl IntoResponse {
+    let device = Device {
+        id: DeviceId(Ulid::new()),
+        kind: payload.kind,
+        state: DeviceState::Active,
+        location: payload.location,
+        manufacturer: payload.manufacturer.map(|s| s.into_boxed_str()),
+        provisioned_at: jiff::Timestamp::now(),
+        sensors: payload
+            .sensors
+            .into_iter()
+            .map(|s| Sensor {
+                id: SensorId(Ulid::new()),
+                kind: s.kind,
+                metric: s.metric.into(),
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice(),
+    };
+
+    match state.device_registry.register(device.clone()).await {
+        Ok(_) => (
+            StatusCode::CREATED,
+            Json(ApiResponse {
+                success: true,
+                data: Some(device_to_response(device)),
+                message: Some("Device created successfully".to_string()),
+            }),
+        ),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                message: Some(format!("Failed to create device: {}", e)),
+            }),
+        ),
+    }
+}
+
+// Update an existing device
+pub async fn update_device(
+    Path(id): Path<String>,
+    State(state): State<AppState<impl DeviceRegistry, impl crate::registry::DispatcherRegistry>>,
+    Json(payload): Json<DeviceUpdateRequest>,
+) -> impl IntoResponse {
+    let device_id = match parse_device_id(&id) {
+        Ok(id) => id,
+        Err(message) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()> {
+                    success: false,
+                    data: None,
+                    message: Some(message),
+                }),
+            );
+        }
+    };
+
+    match state.device_registry.get(device_id).await {
+        Ok(Some(existing)) => {
+            let updated = Device {
+                kind: payload.kind.unwrap_or(existing.kind),
+                state: payload.state.unwrap_or(existing.state),
+                location: payload.location.unwrap_or(existing.location),
+                manufacturer: match payload.manufacturer {
+                    Some(man) => man.map(|s| s.into_boxed_str()),
+                    None => existing.manufacturer,
+                },
+                ..existing
+            };
+
+            match state.device_registry.update(device_id, updated.clone()).await {
+                Ok(_) => (
+                    StatusCode::OK,
+                    Json(ApiResponse {
+                        success: true,
+                        data: Some(device_to_response(updated)),
+                        message: Some("Device updated successfully".to_string()),
+                    }),
+                ),
+                Err(e) => (
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiResponse::<()> {
+                        success: false,
+                        data: None,
+                        message: Some(format!("Failed to update device: {}", e)),
+                    }),
+                ),
+            }
+        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                message: Some("Device not found".to_string()),
+            }),
+        ),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                message: Some(format!("Failed to get device: {}", e)),
+            }),
+        ),
+    }
+}
+
+// Delete (suspend) a device
+pub async fn delete_device(
+    Path(id): Path<String>,
+    State(state): State<AppState<impl DeviceRegistry, impl crate::registry::DispatcherRegistry>>,
+) -> impl IntoResponse {
+    let device_id = match parse_device_id(&id) {
+        Ok(id) => id,
+        Err(message) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(ApiResponse::<()> {
+                    success: false,
+                    data: None,
+                    message: Some(message),
+                }),
+            );
+        }
+    };
+
+    match state.device_registry.suspend(device_id).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(ApiResponse::<()> {
+                success: true,
+                data: None,
+                message: Some("Device suspended successfully".to_string()),
+            }),
+        ),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(ApiResponse::<()> {
+                success: false,
+                data: None,
+                message: Some(format!("Failed to suspend device: {}", e)),
+            }),
+        ),
+    }
+}
+
 // Helper function to parse DeviceId from string
 fn parse_device_id(id: &str) -> Result<DeviceId, String> {
     Ulid::from_str(id)
