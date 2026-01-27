@@ -4,6 +4,10 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use std::str::FromStr;
+use ulid::Ulid;
+
+use ersha_core::{Dispatcher, DispatcherId, DispatcherState, H3Cell};
 
 use super::models::{
     ApiResponse, DispatcherCreateRequest, DispatcherResponse, DispatcherUpdateRequest,
@@ -90,4 +94,21 @@ pub async fn delete_dispatcher(
             message: Some("Not implemented".to_string()),
         }),
     )
+}
+
+// Helper function to parse DispatcherId from string
+fn parse_dispatcher_id(id: &str) -> Result<DispatcherId, String> {
+    Ulid::from_str(id)
+        .map(DispatcherId)
+        .map_err(|_| "Invalid dispatcher ID format. Expected ULID.".to_string())
+}
+
+// Convert Dispatcher to DispatcherResponse
+fn dispatcher_to_response(dispatcher: Dispatcher) -> DispatcherResponse {
+    DispatcherResponse {
+        id: dispatcher.id.0.to_string(),
+        state: dispatcher.state,
+        location: dispatcher.location,
+        provisioned_at: dispatcher.provisioned_at.to_rfc3339(),
+    }
 }
