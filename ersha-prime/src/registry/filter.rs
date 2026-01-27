@@ -1,8 +1,21 @@
-use ersha_core::{DeviceId, DeviceKind, DeviceState, DispatcherState, H3Cell};
+use ersha_core::{
+    DeviceErrorCode, DeviceId, DeviceKind, DeviceState, DispatcherId, DispatcherState, H3Cell,
+    ReadingId, SensorId, StatusId,
+};
 
 use jiff;
 use std::ops::RangeInclusive;
 use ulid::Ulid;
+
+/// Enum variant discriminator for SensorMetric, used for filtering by metric type without values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SensorMetricType {
+    SoilMoisture,
+    SoilTemp,
+    AirTemp,
+    Humidity,
+    Rainfall,
+}
 
 pub enum DeviceSortBy {
     State,
@@ -159,6 +172,200 @@ impl DispatcherFilterBuilder {
     }
 
     pub fn build(self) -> DispatcherFilter {
+        self.filter
+    }
+}
+
+pub enum ReadingSortBy {
+    Timestamp,
+    Confidence,
+    DeviceId,
+}
+
+#[derive(Default)]
+pub struct ReadingFilter {
+    pub ids: Option<Vec<ReadingId>>,
+    pub device_ids: Option<Vec<DeviceId>>,
+    pub sensor_ids: Option<Vec<SensorId>>,
+    pub dispatcher_ids: Option<Vec<DispatcherId>>,
+    pub metric_types: Option<Vec<SensorMetricType>>,
+    pub locations: Option<Vec<H3Cell>>,
+    pub timestamp_after: Option<jiff::Timestamp>,
+    pub timestamp_before: Option<jiff::Timestamp>,
+    pub confidence_range: Option<RangeInclusive<u8>>,
+}
+
+impl ReadingFilter {
+    pub fn builder() -> ReadingFilterBuilder {
+        ReadingFilterBuilder::new()
+    }
+}
+
+#[derive(Default)]
+pub struct ReadingFilterBuilder {
+    filter: ReadingFilter,
+}
+
+impl ReadingFilterBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn ids<I>(mut self, ids: I) -> Self
+    where
+        I: IntoIterator<Item = ReadingId>,
+    {
+        self.filter.ids = Some(ids.into_iter().collect());
+        self
+    }
+
+    pub fn device_ids<I>(mut self, device_ids: I) -> Self
+    where
+        I: IntoIterator<Item = DeviceId>,
+    {
+        self.filter.device_ids = Some(device_ids.into_iter().collect());
+        self
+    }
+
+    pub fn sensor_ids<I>(mut self, sensor_ids: I) -> Self
+    where
+        I: IntoIterator<Item = SensorId>,
+    {
+        self.filter.sensor_ids = Some(sensor_ids.into_iter().collect());
+        self
+    }
+
+    pub fn dispatcher_ids<I>(mut self, dispatcher_ids: I) -> Self
+    where
+        I: IntoIterator<Item = DispatcherId>,
+    {
+        self.filter.dispatcher_ids = Some(dispatcher_ids.into_iter().collect());
+        self
+    }
+
+    pub fn metric_types<I>(mut self, metric_types: I) -> Self
+    where
+        I: IntoIterator<Item = SensorMetricType>,
+    {
+        self.filter.metric_types = Some(metric_types.into_iter().collect());
+        self
+    }
+
+    pub fn locations<I>(mut self, locations: I) -> Self
+    where
+        I: IntoIterator<Item = H3Cell>,
+    {
+        self.filter.locations = Some(locations.into_iter().collect());
+        self
+    }
+
+    pub fn timestamp_after(mut self, ts: jiff::Timestamp) -> Self {
+        self.filter.timestamp_after = Some(ts);
+        self
+    }
+
+    pub fn timestamp_before(mut self, ts: jiff::Timestamp) -> Self {
+        self.filter.timestamp_before = Some(ts);
+        self
+    }
+
+    pub fn confidence_range(mut self, range: RangeInclusive<u8>) -> Self {
+        self.filter.confidence_range = Some(range);
+        self
+    }
+
+    pub fn build(self) -> ReadingFilter {
+        self.filter
+    }
+}
+
+pub enum DeviceStatusSortBy {
+    Timestamp,
+    BatteryPercent,
+    DeviceId,
+}
+
+#[derive(Default)]
+pub struct DeviceStatusFilter {
+    pub ids: Option<Vec<StatusId>>,
+    pub device_ids: Option<Vec<DeviceId>>,
+    pub dispatcher_ids: Option<Vec<DispatcherId>>,
+    pub timestamp_after: Option<jiff::Timestamp>,
+    pub timestamp_before: Option<jiff::Timestamp>,
+    pub battery_range: Option<RangeInclusive<u8>>,
+    pub has_errors: Option<bool>,
+    pub error_codes: Option<Vec<DeviceErrorCode>>,
+}
+
+impl DeviceStatusFilter {
+    pub fn builder() -> DeviceStatusFilterBuilder {
+        DeviceStatusFilterBuilder::new()
+    }
+}
+
+#[derive(Default)]
+pub struct DeviceStatusFilterBuilder {
+    filter: DeviceStatusFilter,
+}
+
+impl DeviceStatusFilterBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn ids<I>(mut self, ids: I) -> Self
+    where
+        I: IntoIterator<Item = StatusId>,
+    {
+        self.filter.ids = Some(ids.into_iter().collect());
+        self
+    }
+
+    pub fn device_ids<I>(mut self, device_ids: I) -> Self
+    where
+        I: IntoIterator<Item = DeviceId>,
+    {
+        self.filter.device_ids = Some(device_ids.into_iter().collect());
+        self
+    }
+
+    pub fn dispatcher_ids<I>(mut self, dispatcher_ids: I) -> Self
+    where
+        I: IntoIterator<Item = DispatcherId>,
+    {
+        self.filter.dispatcher_ids = Some(dispatcher_ids.into_iter().collect());
+        self
+    }
+
+    pub fn timestamp_after(mut self, ts: jiff::Timestamp) -> Self {
+        self.filter.timestamp_after = Some(ts);
+        self
+    }
+
+    pub fn timestamp_before(mut self, ts: jiff::Timestamp) -> Self {
+        self.filter.timestamp_before = Some(ts);
+        self
+    }
+
+    pub fn battery_range(mut self, range: RangeInclusive<u8>) -> Self {
+        self.filter.battery_range = Some(range);
+        self
+    }
+
+    pub fn has_errors(mut self, has_errors: bool) -> Self {
+        self.filter.has_errors = Some(has_errors);
+        self
+    }
+
+    pub fn error_codes<I>(mut self, error_codes: I) -> Self
+    where
+        I: IntoIterator<Item = DeviceErrorCode>,
+    {
+        self.filter.error_codes = Some(error_codes.into_iter().collect());
+        self
+    }
+
+    pub fn build(self) -> DeviceStatusFilter {
         self.filter
     }
 }
