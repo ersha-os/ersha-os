@@ -117,6 +117,36 @@ pub struct SensorStatusResponse {
     pub last_reading: Option<String>,
 }
 
+// Common Response Models
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ApiResponse<T> {
+    pub success: bool,
+    pub data: Option<T>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ListResponse<T> {
+    pub items: Vec<T>,
+    pub total: usize,
+    pub page: Option<usize>,
+    pub per_page: Option<usize>,
+    pub has_more: bool,
+}
+
+// Query Parameters
+#[derive(Debug, Deserialize, Default)]
+pub struct ListQueryParams {
+    #[serde(default)]
+    pub offset: Option<usize>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub sort_by: Option<String>,
+    #[serde(default)]
+    pub sort_order: Option<String>,
+}
+
 // Helper conversions
 impl From<SensorMetricRequest> for ersha_core::SensorMetric {
     fn from(req: SensorMetricRequest) -> Self {
