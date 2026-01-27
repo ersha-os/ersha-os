@@ -5,14 +5,18 @@ use axum::{Router, routing::get};
 use clap::Parser;
 use ersha_core::{Dispatcher, DispatcherState, HelloRequest, HelloResponse};
 use ersha_prime::{
+    api,
     config::{Config, RegistryConfig},
     registry::{
-        DispatcherRegistry, memory::InMemoryDispatcherRegistry, sqlite::SqliteDispatcherRegistry,
+        DeviceRegistry, DispatcherRegistry,
+        memory::{InMemoryDeviceRegistry, InMemoryDispatcherRegistry},
+        sqlite::{SqliteDeviceRegistry, SqliteDispatcherRegistry},
     },
 };
 use ersha_rpc::Server;
 use tokio::net::TcpListener;
 use tokio_util::sync::CancellationToken;
+use tower_http::cors::CorsLayer;
 use tracing::info;
 
 #[derive(Parser)]
@@ -24,8 +28,10 @@ struct Cli {
     config: PathBuf,
 }
 
-struct AppState<R: DispatcherRegistry> {
-    dispatcher_registry: R,
+#[derive(Clone)]
+pub struct AppState<DR, DisR> {
+    pub device_registry: DR,
+    pub dispatcher_registry: DisR,
 }
 
 #[tokio::main]
@@ -53,30 +59,35 @@ async fn main() -> color_eyre::Result<()> {
 
     match config.registry {
         RegistryConfig::Memory => {
-            info!("Using in-memory dispatcher registry");
-            let registry = InMemoryDispatcherRegistry::new();
-            run_server(registry, config.server.rpc_addr, config.server.http_addr).await?;
+            info!("Using in-memory registries");
+            let device_registry = InMemoryDeviceRegistry::new();
+            let dispatcher_registry = InMemoryDispatcherRegistry::new();
+            run_server(device_registry, dispatcher_registry, config.server.rpc_addr, config.server.http_addr).await?;
         }
         RegistryConfig::Sqlite { path } => {
-            info!(path = ?path, "Using SQLite dispatcher registry");
-            let registry = SqliteDispatcherRegistry::new(path.to_string_lossy()).await?;
-            run_server(registry, config.server.rpc_addr, config.server.http_addr).await?;
+            info!(path = ?path, "Using SQLite registries");
+            let device_registry = SqliteDeviceRegistry::new(path.to_string_lossy()).await?;
+            let dispatcher_registry = SqliteDispatcherRegistry::new(path.to_string_lossy()).await?;
+            run_server(device_registry, dispatcher_registry, config.server.rpc_addr, config.server.http_addr).await?;
         }
     }
 
     Ok(())
 }
 
-async fn run_server<R>(
-    registry: R,
+async fn run_server<DR, DisR>(
+    device_registry: DR,
+    dispatcher_registry: DisR,
     rpc_addr: SocketAddr,
     http_addr: SocketAddr,
 ) -> color_eyre::Result<()>
 where
-    R: DispatcherRegistry,
+    DR: DeviceRegistry + Clone + Send + Sync + 'static,
+    DisR: DispatcherRegistry + Clone + Send + Sync + 'static,
 {
     let state = AppState {
-        dispatcher_registry: registry,
+        device_registry,
+        dispatcher_registry,
     };
 
     let cancel = CancellationToken::new();
@@ -84,8 +95,8 @@ where
     let rpc_listener = TcpListener::bind(rpc_addr).await?;
     info!(%rpc_addr, "RPC server listening");
 
-    let rpc_server = Server::new(rpc_listener, state).on_hello(
-        |hello: HelloRequest, _msg_id, _rpc, state: &AppState<R>| {
+    let rpc_server = Server::new(rpc_listener, state.clone()).on_hello(
+        |hello: HelloRequest, _msg_id, _rpc, state: &AppState<DR, DisR>| {
             let dispatcher_registry = state.dispatcher_registry.clone();
             async move {
                 info!(
@@ -114,7 +125,12 @@ where
         },
     );
 
-    let axum_app = Router::new().route("/health", get(health_handler));
+    // Create API router with CORS
+    let axum_app = Router::new()
+        .route("/health", get(health_handler))
+        .nest("/api/v1", api::router())
+        .layer(CorsLayer::permissive()) // Allow all origins for development
+        .with_state(state);
 
     let axum_listener = TcpListener::bind(http_addr).await?;
     info!(%http_addr, "HTTP server listening");
