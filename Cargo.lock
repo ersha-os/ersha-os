@@ -1008,6 +1008,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "ersha-core",
+ "ersha-edge",
  "ersha-rpc",
  "jiff",
  "ordered-float",
