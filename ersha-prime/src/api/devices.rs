@@ -1,29 +1,81 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     Json,
 };
 use std::str::FromStr;
 use ulid::Ulid;
 
-use ersha_core::{Device, DeviceId, DeviceKind, DeviceState, H3Cell, Sensor, SensorId, SensorKind};
-use ersha_prime::registry::DeviceRegistry;
+use ersha_core::{Device, DeviceId, DeviceState, Sensor, SensorId};
+use crate::registry::DeviceRegistry;
 
 use super::models::{
     ApiResponse, DeviceCreateRequest, DeviceResponse, DeviceUpdateRequest, ListQueryParams,
     ListResponse, SensorCreateRequest, SensorResponse,
 };
 use crate::registry::filter::{DeviceFilter, DeviceSortBy, Pagination, QueryOptions, SortOrder};
-use crate::AppState;
+
+// Helper function to parse DeviceId from string
+fn parse_device_id(id: &str) -> Result<DeviceId, String> {
+    Ulid::from_str(id)
+        .map(DeviceId)
+        .map_err(|_| "Invalid device ID format. Expected ULID.".to_string())
+}
+
+// Convert Device to DeviceResponse
+fn device_to_response(device: Device) -> DeviceResponse {
+    DeviceResponse {
+        id: device.id.0.to_string(),
+        kind: device.kind,
+        state: device.state,
+        location: device.location,
+        manufacturer: device.manufacturer.map(|s| s.to_string()),
+        provisioned_at: device.provisioned_at.to_string(),
+        sensors: device
+            .sensors
+            .into_vec()
+            .into_iter()
+            .map(|s| SensorResponse {
+                id: s.id.0.to_string(),
+                kind: s.kind,
+                metric: s.metric.into(),
+            })
+            .collect(),
+    }
+}
+
+// Helper to create error response
+fn error_response(status: StatusCode, message: String) -> Response {
+    let api_response = ApiResponse::<()> {
+        success: false,
+        data: None,
+        message: Some(message),
+    };
+    (status, Json(api_response)).into_response()
+}
+
+// Helper to create success response
+fn success_response<T: serde::Serialize>(status: StatusCode, data: T, message: Option<String>) -> Response {
+    let api_response = ApiResponse {
+        success: true,
+        data: Some(data),
+        message,
+    };
+    (status, Json(api_response)).into_response()
+}
 
 // List devices with pagination and filtering
-pub async fn list_devices(
-    State(state): State<AppState<impl DeviceRegistry, impl crate::registry::DispatcherRegistry>>,
+pub async fn list_devices<DR, DisR>(
+    State(state): State<crate::AppState<DR, DisR>>,
     Query(params): Query<ListQueryParams>,
-) -> impl IntoResponse {
+) -> Response
+where
+    DR: DeviceRegistry + Send + Sync,
+    DisR: Send + Sync,
+{
     let options = QueryOptions {
-        filter: None, // Start with no filters
+        filter: DeviceFilter::default(),
         sort_by: DeviceSortBy::ProvisionAt,
         sort_order: SortOrder::Desc,
         pagination: Pagination::Offset {
@@ -32,9 +84,11 @@ pub async fn list_devices(
         },
     };
 
-    match state.device_registry.list(options).await {
-        Ok(devices) => {
-            let total = state.device_registry.count(None).await.unwrap_or(0);
+    let list_result = state.device_registry.list(options).await;
+    let count_result = state.device_registry.count(None).await;
+    
+    match (list_result, count_result) {
+        (Ok(devices), Ok(total)) => {
             let responses: Vec<DeviceResponse> = devices
                 .into_iter()
                 .map(device_to_response)
@@ -48,78 +102,58 @@ pub async fn list_devices(
                 has_more: total > params.offset.unwrap_or(0) + params.limit.unwrap_or(50),
             };
             
-            (
-                StatusCode::OK,
-                Json(ApiResponse {
-                    success: true,
-                    data: Some(response),
-                    message: None,
-                }),
+            success_response(StatusCode::OK, response, None)
+        }
+        (Err(e), _) | (_, Err(e)) => {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to list devices: {}", e)
             )
         }
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()> {
-                success: false,
-                data: None,
-                message: Some(format!("Failed to list devices: {}", e)),
-            }),
-        ),
     }
 }
 
 // Get a specific device by ID
-pub async fn get_device(
+pub async fn get_device<DR, DisR>(
     Path(id): Path<String>,
-    State(state): State<AppState<impl DeviceRegistry, impl crate::registry::DispatcherRegistry>>,
-) -> impl IntoResponse {
+    State(state): State<crate::AppState<DR, DisR>>,
+) -> Response
+where
+    DR: DeviceRegistry + Send + Sync,
+    DisR: Send + Sync,
+{
     let device_id = match parse_device_id(&id) {
         Ok(id) => id,
         Err(message) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()> {
-                    success: false,
-                    data: None,
-                    message: Some(message),
-                }),
-            );
+            return error_response(StatusCode::BAD_REQUEST, message);
         }
     };
 
     match state.device_registry.get(device_id).await {
-        Ok(Some(device)) => (
-            StatusCode::OK,
-            Json(ApiResponse {
-                success: true,
-                data: Some(device_to_response(device)),
-                message: None,
-            }),
-        ),
-        Ok(None) => (
-            StatusCode::NOT_FOUND,
-            Json(ApiResponse::<()> {
-                success: false,
-                data: None,
-                message: Some("Device not found".to_string()),
-            }),
-        ),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()> {
-                success: false,
-                data: None,
-                message: Some(format!("Failed to get device: {}", e)),
-            }),
-        ),
+        Ok(Some(device)) => {
+            success_response(StatusCode::OK, device_to_response(device), None)
+        }
+        Ok(None) => {
+            error_response(StatusCode::NOT_FOUND, "Device not found".to_string())
+        }
+        Err(e) => {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get device: {}", e)
+            )
+        }
     }
 }
 
 // Create a new device
-pub async fn create_device(
-    State(state): State<AppState<impl DeviceRegistry, impl crate::registry::DispatcherRegistry>>,
+pub async fn create_device<DR, DisR>(
+    State(state): State<crate::AppState<DR, DisR>>,
     Json(payload): Json<DeviceCreateRequest>,
-) -> impl IntoResponse {
+) -> Response
+where
+    DR: DeviceRegistry + Send + Sync,
+    DisR: Send + Sync,
+{
     let device = Device {
         id: DeviceId(Ulid::new()),
         kind: payload.kind,
@@ -140,42 +174,36 @@ pub async fn create_device(
     };
 
     match state.device_registry.register(device.clone()).await {
-        Ok(_) => (
-            StatusCode::CREATED,
-            Json(ApiResponse {
-                success: true,
-                data: Some(device_to_response(device)),
-                message: Some("Device created successfully".to_string()),
-            }),
-        ),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(ApiResponse::<()> {
-                success: false,
-                data: None,
-                message: Some(format!("Failed to create device: {}", e)),
-            }),
-        ),
+        Ok(_) => {
+            success_response(
+                StatusCode::CREATED, 
+                device_to_response(device), 
+                Some("Device created successfully".to_string())
+            )
+        }
+        Err(e) => {
+            error_response(
+                StatusCode::BAD_REQUEST,
+                format!("Failed to create device: {}", e)
+            )
+        }
     }
 }
 
 // Update an existing device
-pub async fn update_device(
+pub async fn update_device<DR, DisR>(
     Path(id): Path<String>,
-    State(state): State<AppState<impl DeviceRegistry, impl crate::registry::DispatcherRegistry>>,
+    State(state): State<crate::AppState<DR, DisR>>,
     Json(payload): Json<DeviceUpdateRequest>,
-) -> impl IntoResponse {
+) -> Response
+where
+    DR: DeviceRegistry + Send + Sync,
+    DisR: Send + Sync,
+{
     let device_id = match parse_device_id(&id) {
         Ok(id) => id,
         Err(message) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()> {
-                    success: false,
-                    data: None,
-                    message: Some(message),
-                }),
-            );
+            return error_response(StatusCode::BAD_REQUEST, message);
         }
     };
 
@@ -193,99 +221,80 @@ pub async fn update_device(
             };
 
             match state.device_registry.update(device_id, updated.clone()).await {
-                Ok(_) => (
-                    StatusCode::OK,
-                    Json(ApiResponse {
-                        success: true,
-                        data: Some(device_to_response(updated)),
-                        message: Some("Device updated successfully".to_string()),
-                    }),
-                ),
-                Err(e) => (
-                    StatusCode::BAD_REQUEST,
-                    Json(ApiResponse::<()> {
-                        success: false,
-                        data: None,
-                        message: Some(format!("Failed to update device: {}", e)),
-                    }),
-                ),
+                Ok(_) => {
+                    success_response(
+                        StatusCode::OK,
+                        device_to_response(updated),
+                        Some("Device updated successfully".to_string())
+                    )
+                }
+                Err(e) => {
+                    error_response(
+                        StatusCode::BAD_REQUEST,
+                        format!("Failed to update device: {}", e)
+                    )
+                }
             }
         }
-        Ok(None) => (
-            StatusCode::NOT_FOUND,
-            Json(ApiResponse::<()> {
-                success: false,
-                data: None,
-                message: Some("Device not found".to_string()),
-            }),
-        ),
-        Err(e) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ApiResponse::<()> {
-                success: false,
-                data: None,
-                message: Some(format!("Failed to get device: {}", e)),
-            }),
-        ),
+        Ok(None) => {
+            error_response(StatusCode::NOT_FOUND, "Device not found".to_string())
+        }
+        Err(e) => {
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get device: {}", e)
+            )
+        }
     }
 }
 
 // Delete (suspend) a device
-pub async fn delete_device(
+pub async fn delete_device<DR, DisR>(
     Path(id): Path<String>,
-    State(state): State<AppState<impl DeviceRegistry, impl crate::registry::DispatcherRegistry>>,
-) -> impl IntoResponse {
+    State(state): State<crate::AppState<DR, DisR>>,
+) -> Response
+where
+    DR: DeviceRegistry + Send + Sync,
+    DisR: Send + Sync,
+{
     let device_id = match parse_device_id(&id) {
         Ok(id) => id,
         Err(message) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()> {
-                    success: false,
-                    data: None,
-                    message: Some(message),
-                }),
-            );
+            return error_response(StatusCode::BAD_REQUEST, message);
         }
     };
 
     match state.device_registry.suspend(device_id).await {
-        Ok(_) => (
-            StatusCode::OK,
-            Json(ApiResponse::<()> {
-                success: true,
-                data: None,
-                message: Some("Device suspended successfully".to_string()),
-            }),
-        ),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(ApiResponse::<()> {
-                success: false,
-                data: None,
-                message: Some(format!("Failed to suspend device: {}", e)),
-            }),
-        ),
+        Ok(_) => {
+            success_response(
+                StatusCode::OK,
+                (),
+                Some("Device suspended successfully".to_string())
+            )
+        }
+        Err(e) => {
+            error_response(
+                StatusCode::BAD_REQUEST,
+                format!("Failed to suspend device: {}", e)
+            )
+        }
     }
 }
 
 // Add a sensor to a device
-pub async fn add_sensor(
+pub async fn add_sensor<DR, DisR>(
     Path(id): Path<String>,
-    State(state): State<AppState<impl DeviceRegistry, impl crate::registry::DispatcherRegistry>>,
+    State(state): State<crate::AppState<DR, DisR>>,
     Json(payload): Json<SensorCreateRequest>,
-) -> impl IntoResponse {
+) -> Response
+where
+    DR: DeviceRegistry + Send + Sync,
+    DisR: Send + Sync,
+{
     let device_id = match parse_device_id(&id) {
         Ok(id) => id,
         Err(message) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(ApiResponse::<()> {
-                    success: false,
-                    data: None,
-                    message: Some(message),
-                }),
-            );
+            return error_response(StatusCode::BAD_REQUEST, message);
         }
     };
 
@@ -296,50 +305,18 @@ pub async fn add_sensor(
     };
 
     match state.device_registry.add_sensor(device_id, sensor).await {
-        Ok(_) => (
-            StatusCode::CREATED,
-            Json(ApiResponse::<()> {
-                success: true,
-                data: None,
-                message: Some("Sensor added successfully".to_string()),
-            }),
-        ),
-        Err(e) => (
-            StatusCode::BAD_REQUEST,
-            Json(ApiResponse::<()> {
-                success: false,
-                data: None,
-                message: Some(format!("Failed to add sensor: {}", e)),
-            }),
-        ),
-    }
-}
-
-// Helper function to parse DeviceId from string
-fn parse_device_id(id: &str) -> Result<DeviceId, String> {
-    Ulid::from_str(id)
-        .map(DeviceId)
-        .map_err(|_| "Invalid device ID format. Expected ULID.".to_string())
-}
-
-// Convert Device to DeviceResponse
-fn device_to_response(device: Device) -> DeviceResponse {
-    DeviceResponse {
-        id: device.id.0.to_string(),
-        kind: device.kind,
-        state: device.state,
-        location: device.location,
-        manufacturer: device.manufacturer.map(|s| s.to_string()),
-        provisioned_at: device.provisioned_at.to_rfc3339(),
-        sensors: device
-            .sensors
-            .into_vec()
-            .into_iter()
-            .map(|s| SensorResponse {
-                id: s.id.0.to_string(),
-                kind: s.kind,
-                metric: s.metric.into(),
-            })
-            .collect(),
+        Ok(_) => {
+            success_response(
+                StatusCode::CREATED,
+                (),
+                Some("Sensor added successfully".to_string())
+            )
+        }
+        Err(e) => {
+            error_response(
+                StatusCode::BAD_REQUEST,
+                format!("Failed to add sensor: {}", e)
+            )
+        }
     }
 }
