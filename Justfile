@@ -187,3 +187,26 @@ tls-wipe:
     @echo "Wiping all TLS assets from workspace..."
     rm -rf {{prime_keys}} {{dispatch_keys}} {{rpc_example_keys}} {{root_keys}}
     cd {{tls_dir}} && rm -f *.crt *.key *.csr *.srl
+
+# ============================================================
+# Frontend Deployment (to Axum)
+# ============================================================
+
+ui_dir := "ersha-registry"
+prime_public := "ersha-prime/public"
+
+# Build UI and move assets to ersha-prime/public for Axum to serve
+ui-deploy:
+    @echo "Building ersha-registry..."
+    cd {{ui_dir}} && npm run build
+
+    @echo "Preparing ersha-prime public directory..."
+    mkdir -p {{prime_public}}
+
+    # Clean old assets to prevent staleness
+    rm -rf {{prime_public}}/*
+
+    @echo "Moving built files to {{prime_public}}..."
+    cp -r {{ui_dir}}/dist/* {{prime_public}}/
+
+    @echo "Done! Axum can now serve the UI from {{prime_public}}"
