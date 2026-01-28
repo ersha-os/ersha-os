@@ -39,6 +39,10 @@ features = ["sqlite", "runtime-tokio", "macros", "migrate"]
 [workspace.dependencies.thiserror]
 version = "2.0.18"
 
+[workspace.dependencies.clickhouse]
+version = "0.13"
+features = ["time"]
+
 [workspace.dependencies.clap]
 version = "4"
 features = ["derive"]

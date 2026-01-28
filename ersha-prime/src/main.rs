@@ -14,6 +14,10 @@ use ersha_prime::{
     config::{Config, RegistryConfig},
     registry::{
         DeviceRegistry, DeviceStatusRegistry, DispatcherRegistry, ReadingRegistry,
+        clickhouse::{
+            ClickHouseDeviceRegistry, ClickHouseDeviceStatusRegistry, ClickHouseDispatcherRegistry,
+            ClickHouseReadingRegistry,
+        },
         memory::{
             InMemoryDeviceRegistry, InMemoryDeviceStatusRegistry, InMemoryDispatcherRegistry,
             InMemoryReadingRegistry,
@@ -98,6 +102,23 @@ async fn main() -> color_eyre::Result<()> {
             let device_registry = SqliteDeviceRegistry::new(&path_str).await?;
             let reading_registry = SqliteReadingRegistry::new(&path_str).await?;
             let device_status_registry = SqliteDeviceStatusRegistry::new(&path_str).await?;
+            run_server(
+                dispatcher_registry,
+                device_registry,
+                reading_registry,
+                device_status_registry,
+                config.server.rpc_addr,
+                config.server.http_addr,
+            )
+            .await?;
+        }
+        RegistryConfig::Clickhouse { url, database } => {
+            info!(url = %url, database = %database, "Using ClickHouse registries");
+            let dispatcher_registry = ClickHouseDispatcherRegistry::new(&url, &database).await?;
+            let device_registry = ClickHouseDeviceRegistry::new(&url, &database).await?;
+            let reading_registry = ClickHouseReadingRegistry::new(&url, &database).await?;
+            let device_status_registry =
+                ClickHouseDeviceStatusRegistry::new(&url, &database).await?;
             run_server(
                 dispatcher_registry,
                 device_registry,

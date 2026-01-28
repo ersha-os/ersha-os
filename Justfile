@@ -95,6 +95,18 @@ test-dashboard:
     cargo test -p ersha-dashboard
 
 # ============================================================
+# Infrastructure Recipes
+# ============================================================
+
+# Run ClickHouse server in Docker (no auth for local dev)
+clickhouse:
+    docker run -d --name ersha-clickhouse -p 8123:8123 -p 9000:9000 -e CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1 -e CLICKHOUSE_PASSWORD="" clickhouse/clickhouse-server
+
+# Stop and remove ClickHouse container
+clickhouse-stop:
+    docker stop ersha-clickhouse && docker rm ersha-clickhouse
+
+# ============================================================
 # Development Recipes
 # ============================================================
 

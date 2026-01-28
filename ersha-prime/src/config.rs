@@ -22,6 +22,7 @@ pub struct ServerConfig {
 pub enum RegistryConfig {
     Memory,
     Sqlite { path: PathBuf },
+    Clickhouse { url: String, database: String },
 }
 
 impl Config {

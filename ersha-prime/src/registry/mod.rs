@@ -1,3 +1,4 @@
+pub mod clickhouse;
 pub mod filter;
 pub mod memory;
 pub mod sqlite;
