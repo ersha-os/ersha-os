@@ -2,7 +2,7 @@ module Main exposing (main, subscriptions)
 
 import Browser exposing (Document)
 import Html exposing (..)
-import Html.Attributes exposing (attribute, class, placeholder, type_, value)
+import Html.Attributes exposing (attribute, class, placeholder, selected, title, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as Decode exposing (Decoder, field, int, maybe, string)
@@ -79,7 +79,10 @@ type Msg
     | CloseModal
       -- Forms
     | UpdateDispatcherForm DispatcherForm
-    | UpdateDeviceFrom DeviceForm
+    | UpdateDeviceForm DeviceForm
+    | AddSensor
+    | RemoveSensor Int
+    | UpdateSensor Int SensorForm
       -- Api Lifecycle
     | FetchAll
     | GotDispatchers (Result Http.Error (List Dispatcher))
@@ -100,14 +103,186 @@ view model =
                 DispatcherModal form ->
                     viewDispatcherModal form
 
-                DeviceModal _ ->
-                    text "pending..."
+                DeviceModal form ->
+                    viewDeviceModal form
 
                 Closed ->
                     text ""
             ]
         ]
     }
+
+
+viewDeviceModal : DeviceForm -> Html Msg
+viewDeviceModal form =
+    div [ class "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" ]
+        [ div [ class "bg-[#181b1f] border border-[#2c2c2e] rounded-md shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" ]
+            [ -- Header
+              div [ class "bg-[#222529] px-6 py-4 border-b border-[#2c2c2e] flex justify-between items-center" ]
+                [ h3 [ class "text-[#d8d9da] text-sm font-bold uppercase tracking-wider" ] [ text "Register New Device" ]
+                , button [ class "text-gray-500 hover:text-white", onClick CloseModal ] [ text "✕" ]
+                ]
+
+            -- Scrollable Body
+            , div [ class "p-6 space-y-6 overflow-y-auto" ]
+                [ -- Basic Info Section
+                  div [ class "grid grid-cols-2 gap-4" ]
+                    [ viewInput "Device ID (Optional)"
+                        (Maybe.withDefault "" form.id)
+                        (\val ->
+                            UpdateDeviceForm
+                                { form
+                                    | id =
+                                        if val == "" then
+                                            Nothing
+
+                                        else
+                                            Just val
+                                }
+                        )
+                    , div [ class "space-y-1.5" ]
+                        [ label [ class "text-xs font-semibold text-orange-400 uppercase" ] [ text "H3 Cell Index" ]
+                        , input
+                            [ type_ "number"
+                            , class "w-full bg-[#0b0c0e] border border-[#2c2c2e] text-[#d8d9da] rounded px-3 py-2 text-sm font-mono focus:border-orange-500 focus:outline-none transition-colors"
+                            , value (String.fromInt form.location)
+                            , onInput (\val -> UpdateDeviceForm { form | location = String.toInt val |> Maybe.withDefault 0 })
+                            ]
+                            []
+                        , p [ class "text-[10px] text-gray-500 italic" ] [ text "Specify the hexagonal grid index for geographic dispatching." ]
+                        ]
+                    ]
+                , div [ class "grid grid-cols-2 gap-4" ]
+                    [ viewSelect "Manufacturer" (Maybe.withDefault "" form.manufacturer) [ "Sony", "Bosch", "Ersha-Custom" ] (\val -> UpdateDeviceForm { form | manufacturer = Just val })
+                    , viewSelect "Device Kind" "Sensor" [ "Sensor" ] (\_ -> UpdateDeviceForm { form | kind = Just Sensor })
+                    ]
+
+                -- Dynamic Sensors Section
+                , div [ class "space-y-4" ]
+                    [ div [ class "flex justify-between items-center border-b border-[#2c2c2e] pb-2" ]
+                        [ h4 [ class "text-xs font-bold text-gray-500 uppercase" ] [ text "Attached Sensors" ]
+                        , button
+                            [ class "text-xs bg-blue-600/20 text-blue-400 border border-blue-500/50 px-2 py-1 rounded hover:bg-blue-600/40 transition"
+                            , onClick AddSensor
+                            ]
+                            [ text "+ Add Sensor" ]
+                        ]
+                    , if List.isEmpty form.sensors then
+                        p [ class "text-xs text-gray-600 italic" ] [ text "No sensors added yet." ]
+
+                      else
+                        div [ class "space-y-3" ] (List.indexedMap viewSensorRow form.sensors)
+                    ]
+                ]
+
+            -- Footer
+            , div [ class "bg-[#222529] px-6 py-4 flex justify-end gap-3 border-t border-[#2c2c2e]" ]
+                [ button [ class "text-[#d8d9da] hover:bg-[#2c2c2e] px-4 py-2 rounded text-sm", onClick CloseModal ] [ text "Cancel" ]
+                , button
+                    [ class "bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded text-sm font-bold transition"
+                    , onClick (SubmitForm (DeviceModal form))
+                    ]
+                    [ text "Provision Device" ]
+                ]
+            ]
+        ]
+
+
+viewInput : String -> String -> (String -> Msg) -> Html Msg
+viewInput labelText currentVal toMsg =
+    div [ class "flex flex-col gap-1.5 w-full" ]
+        [ label [ class "text-[10px] font-bold text-orange-400 uppercase tracking-tight" ]
+            [ text labelText ]
+        , input
+            [ type_ "text"
+            , class "bg-[#0b0c0e] border border-[#2c2c2e] text-[#d8d9da] rounded px-3 py-2 text-sm font-mono focus:border-orange-500 focus:outline-none transition-all placeholder:text-gray-700"
+            , value currentVal
+            , onInput toMsg
+            ]
+            []
+        ]
+
+
+viewSelect : String -> String -> List String -> (String -> Msg) -> Html Msg
+viewSelect labelText currentVal options toMsg =
+    div [ class "flex flex-col gap-1.5 w-full" ]
+        [ label [ class "text-[10px] font-bold text-orange-400 uppercase tracking-tight" ]
+            [ text labelText ]
+        , div [ class "relative" ]
+            [ select
+                [ class "w-full bg-[#0b0c0e] border border-[#2c2c2e] text-[#d8d9da] rounded px-3 py-2 text-sm appearance-none focus:border-orange-500 focus:outline-none cursor-pointer transition-all"
+                , onInput toMsg
+                ]
+                (List.map (\opt -> option [ value opt, selected (opt == currentVal) ] [ text opt ]) options)
+            , -- Custom dropdown arrow
+              div [ class "absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-500 text-[10px]" ]
+                [ text "▼" ]
+            ]
+        ]
+
+
+viewSensorRow : Int -> SensorForm -> Html Msg
+viewSensorRow index sensor =
+    div [ class "flex flex-col gap-3 bg-[#0b0c0e] p-4 rounded border border-[#2c2c2e]" ]
+        [ div [ class "flex items-start gap-3" ]
+            [ div [ class "flex-1" ]
+                [ viewInput "Sensor ID (Optional)"
+                    (Maybe.withDefault "" sensor.id)
+                    (\val ->
+                        UpdateSensor index
+                            { sensor
+                                | id =
+                                    if val == "" then
+                                        Nothing
+
+                                    else
+                                        Just val
+                            }
+                    )
+                ]
+            , button
+                [ class "mt-6 bg-red-900/20 text-red-500 border border-red-900/50 p-2 rounded hover:bg-red-900/40 transition-colors"
+                , onClick (RemoveSensor index)
+                , title "Remove Sensor"
+                ]
+                [ text "🗑" ]
+            ]
+        , div [ class "flex-1" ]
+            [ label [ class "text-[10px] text-gray-500 uppercase font-bold mb-1.5 block" ] [ text "Sensor Kind" ]
+            , select
+                [ class "w-full bg-[#181b1f] border border-[#2c2c2e] text-[#d8d9da] rounded px-2 py-1.5 text-xs focus:border-orange-500 focus:outline-none"
+                , onInput (\val -> UpdateSensor index { sensor | kind = stringToSensorKind val })
+                ]
+                [ option [ value "SoilMoisture", selected (sensor.kind == SoilMoisture) ] [ text "Soil Moisture" ]
+                , option [ value "SoilTemp", selected (sensor.kind == SoilTemp) ] [ text "Soil Temp" ]
+                , option [ value "AirTemp", selected (sensor.kind == AirTemp) ] [ text "Air Temp" ]
+                , option [ value "Humidity", selected (sensor.kind == Humidity) ] [ text "Humidity" ]
+                , option [ value "RainFall", selected (sensor.kind == RainFall) ] [ text "Rainfall" ]
+                ]
+            ]
+        ]
+
+
+stringToSensorKind : String -> SensorKind
+stringToSensorKind val =
+    case val of
+        "SoilMoisture" ->
+            SoilMoisture
+
+        "SoilTemp" ->
+            SoilTemp
+
+        "AirTemp" ->
+            AirTemp
+
+        "Humidity" ->
+            Humidity
+
+        "RainFall" ->
+            RainFall
+
+        _ ->
+            SoilMoisture
 
 
 viewDispatcherModal : DispatcherForm -> Html Msg
@@ -489,10 +664,22 @@ navBar =
                 ]
                 [ text "Add Dispatcher" ]
             , button
-                [ class "bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded text-sm font-medium transition" ]
+                [ class "bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded text-sm font-medium transition"
+                , onClick <| OpenModal (DeviceModal newDeviceModal)
+                ]
                 [ text "Add Device" ]
             ]
         ]
+
+
+newDeviceModal : DeviceForm
+newDeviceModal =
+    { id = Nothing
+    , location = 0
+    , kind = Just Sensor
+    , manufacturer = Just ""
+    , sensors = []
+    }
 
 
 newDisparcherForm : DispatcherForm
@@ -573,8 +760,65 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        _ ->
-            ( model, Cmd.none )
+        AddSensor ->
+            case model.modal of
+                DeviceModal form ->
+                    let
+                        newSensor =
+                            { id = Nothing, kind = SoilMoisture }
+
+                        updatedForm =
+                            { form | sensors = newSensor :: form.sensors }
+                    in
+                    ( { model | modal = DeviceModal updatedForm }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        RemoveSensor index ->
+            case model.modal of
+                DeviceModal form ->
+                    let
+                        updatedSensors =
+                            List.take index form.sensors ++ List.drop (index + 1) form.sensors
+
+                        updatedForm =
+                            { form | sensors = updatedSensors }
+                    in
+                    ( { model | modal = DeviceModal updatedForm }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        UpdateSensor index updatedSensor ->
+            case model.modal of
+                DeviceModal form ->
+                    let
+                        updateEntry i old =
+                            if i == index then
+                                updatedSensor
+
+                            else
+                                old
+
+                        updatedSensors =
+                            List.indexedMap updateEntry form.sensors
+
+                        updatedForm =
+                            { form | sensors = updatedSensors }
+                    in
+                    ( { model | modal = DeviceModal updatedForm }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        UpdateDeviceForm form ->
+            case model.modal of
+                DeviceModal _ ->
+                    ( { model | modal = DeviceModal form }, Cmd.none )
+
+                _ ->
+                    ( model, Cmd.none )
 
 
 httpErrorToString : Http.Error -> String
