@@ -1,14 +1,13 @@
-module Main exposing (main, subscriptions)
+module Main exposing (main, sensorDecoder, subscriptions)
 
 import Browser exposing (Document)
 import Html exposing (..)
 import Html.Attributes exposing (attribute, class, placeholder, selected, title, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Http
-import Json.Decode as Decode exposing (Decoder, field, int, list, maybe, string)
+import Json.Decode as Decode exposing (Decoder, fail, field, int, list, maybe, string, succeed)
 import Json.Encode as Encode
 import SvgAssets
-import Types exposing (Device, Dispatcher)
 import Url.Builder as Builder
 
 
@@ -30,6 +29,7 @@ type Modals
     = DispatcherModal DispatcherForm
     | DeviceModal DeviceForm
     | DetailDispatcherModal (ApiData Dispatcher)
+    | DetailDeviceModal (ApiData Device)
     | Closed
 
 
@@ -47,6 +47,14 @@ type alias DispatcherForm =
     }
 
 
+type alias Dispatcher =
+    { id : String
+    , location : Int
+    , state : String
+    , provisionedAt : String
+    }
+
+
 type alias DeviceForm =
     { id : Maybe Ulid
     , location : H3Cell
@@ -56,8 +64,25 @@ type alias DeviceForm =
     }
 
 
+type alias Device =
+    { id : String
+    , kind : String
+    , state : String
+    , location : Int
+    , manufacturer : Maybe String
+    , provisionedAt : String
+    , sensors : List Sensor
+    }
+
+
 type DeviceKind
-    = Sensor
+    = SensorDevice
+
+
+type alias Sensor =
+    { id : Ulid
+    , kind : SensorKind
+    }
 
 
 type alias SensorForm =
@@ -140,6 +165,8 @@ type Msg
     | SubmittedDevice (Result Http.Error ())
     | OpenDispatcherDetail Ulid
     | GotDetailDispatcher (Result Http.Error Dispatcher)
+    | OpenDeviceDetail Ulid
+    | GotDetailDevice (Result Http.Error Device)
     | SubmitForm Modals
 
 
@@ -160,11 +187,112 @@ view model =
                 DetailDispatcherModal data ->
                     viewDetailDispatcherModal data
 
+                DetailDeviceModal data ->
+                    viewDetailDeviceModal data
+
                 Closed ->
                     text ""
             ]
         ]
     }
+
+
+viewDetailDeviceModal : ApiData Device -> Html Msg
+viewDetailDeviceModal remoteData =
+    case remoteData of
+        NotAsked ->
+            text ""
+
+        Loading ->
+            viewModal
+                { title = "Device Intelligence"
+                , body =
+                    div [ class "flex flex-col items-center justify-center p-12 space-y-4" ]
+                        [ div [ class "w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" ] []
+                        , p [ class "text-sm text-gray-500 font-mono" ] [ text "Polling device registry..." ]
+                        ]
+                , footer = [ viewCloseButton ]
+                }
+
+        Failure err ->
+            viewModal
+                { title = "Registry Error"
+                , body =
+                    div [ class "bg-red-900/20 border border-red-500/50 p-6 rounded" ]
+                        [ p [ class "text-red-400 text-sm font-mono" ] [ text (httpErrorToString err) ] ]
+                , footer = [ viewCloseButton ]
+                }
+
+        Success device ->
+            viewModal
+                { title = "Device: " ++ device.id
+                , body = viewDeviceDetails device
+                , footer =
+                    [ viewCloseButton
+                    ]
+                }
+
+
+viewDeviceDetails : Device -> Html Msg
+viewDeviceDetails device =
+    div [ class "space-y-6" ]
+        [ div [ class "grid grid-cols-3 gap-4" ]
+            [ viewDetailItem "Status" (span [ class (stateBadgeClass device.state) ] [ text device.state ])
+            , viewDetailItem "Hardware Kind" (text device.kind)
+            , viewDetailItem "Manufacturer" (text (Maybe.withDefault "Generic/Custom" device.manufacturer))
+            ]
+        , div [ class "grid grid-cols-2 gap-4 bg-[#0b0c0e] p-4 rounded border border-[#2c2c2e]" ]
+            [ viewDetailItem "H3 Location Index" (span [ class "text-orange-400 font-mono" ] [ text (String.fromInt device.location) ])
+            , viewDetailItem "Provisioned At" (text device.provisionedAt)
+            ]
+        , div [ class "space-y-3" ]
+            [ h4 [ class "text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-[#2c2c2e] pb-2" ]
+                [ text ("Attached Sensors (" ++ String.fromInt (List.length device.sensors) ++ ")") ]
+            , if List.isEmpty device.sensors then
+                p [ class "text-sm text-gray-600 italic" ] [ text "No sensors detected on this device." ]
+
+              else
+                div [ class "grid grid-cols-1 gap-2" ] (List.map viewSensorDetailItem device.sensors)
+            ]
+        ]
+
+
+viewDetailItem : String -> Html Msg -> Html Msg
+viewDetailItem txtLabel val =
+    div [ class "flex flex-col gap-1" ]
+        [ label [ class "text-[10px] text-gray-500 uppercase font-bold" ] [ text txtLabel ]
+        , div [ class "text-sm text-[#d8d9da]" ] [ val ]
+        ]
+
+
+viewSensorDetailItem : Sensor -> Html Msg
+viewSensorDetailItem sensor =
+    div [ class "flex justify-between items-center bg-[#222529] px-4 py-3 rounded border border-[#2c2c2e] hover:border-gray-600 transition" ]
+        [ div [ class "flex flex-col" ]
+            [ span [ class "text-xs font-bold text-gray-300" ] [ text (sensorKindToString sensor.kind) ]
+            , span [ class "text-[10px] text-gray-500 font-mono" ] [ text sensor.id ]
+            ]
+        , div [ class "h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" ] [] -- Vitality pulse
+        ]
+
+
+sensorKindToString : SensorKind -> String
+sensorKindToString kind =
+    case kind of
+        SoilMoisture ->
+            "Soil Moisture"
+
+        SoilTemp ->
+            "Soil Temperature"
+
+        AirTemp ->
+            "Air Temperature"
+
+        Humidity ->
+            "Humidity"
+
+        RainFall ->
+            "Rainfall Volume"
 
 
 viewDetailDispatcherModal : ApiData Dispatcher -> Html Msg
@@ -301,7 +429,7 @@ viewDeviceModal form =
                     ]
                 , div [ class "grid grid-cols-2 gap-4" ]
                     [ viewSelect "Manufacturer" (Maybe.withDefault "H3Cell Hexgon index" form.manufacturer) [ "Sony", "Bosch", "Ersha-Custom" ] (\val -> UpdateDeviceForm { form | manufacturer = Just val })
-                    , viewSelect "Device Kind" "Sensor" [ "Sensor" ] (\_ -> UpdateDeviceForm { form | kind = Just Sensor })
+                    , viewSelect "Device Kind" "Sensor" [ "Sensor" ] (\_ -> UpdateDeviceForm { form | kind = Just SensorDevice })
                     ]
                 , viewSensorSection form
                 ]
@@ -366,8 +494,8 @@ viewSensorRow index sensor =
         [ div [ class "flex items-start gap-3" ]
             [ div [ class "flex-1" ]
                 [ viewInput "Sensor ID (Optional)"
-                    "Sensor Ulid"
                     (Maybe.withDefault "" sensor.id)
+                    "Leave blank to auto generate"
                     (\val ->
                         UpdateSensor index
                             { sensor
@@ -393,11 +521,11 @@ viewSensorRow index sensor =
                 [ class "w-full bg-[#181b1f] border border-[#2c2c2e] text-[#d8d9da] rounded px-2 py-1.5 text-xs focus:border-orange-500 focus:outline-none"
                 , onInput (\val -> UpdateSensor index { sensor | kind = stringToSensorKind val })
                 ]
-                [ option [ value "SoilMoisture", selected (sensor.kind == SoilMoisture) ] [ text "Soil Moisture" ]
-                , option [ value "SoilTemp", selected (sensor.kind == SoilTemp) ] [ text "Soil Temp" ]
-                , option [ value "AirTemp", selected (sensor.kind == AirTemp) ] [ text "Air Temp" ]
-                , option [ value "Humidity", selected (sensor.kind == Humidity) ] [ text "Humidity" ]
-                , option [ value "RainFall", selected (sensor.kind == RainFall) ] [ text "Rainfall" ]
+                [ option [ value "soil_moisture", selected (sensor.kind == SoilMoisture) ] [ text "Soil Moisture" ]
+                , option [ value "soil_temp", selected (sensor.kind == SoilTemp) ] [ text "Soil Temp" ]
+                , option [ value "air_temp", selected (sensor.kind == AirTemp) ] [ text "Air Temp" ]
+                , option [ value "humidity", selected (sensor.kind == Humidity) ] [ text "Humidity" ]
+                , option [ value "rainfall", selected (sensor.kind == RainFall) ] [ text "Rainfall" ]
                 ]
             ]
         ]
@@ -516,7 +644,9 @@ viewDeviceRow device =
         , td
             [ class "px-4 py-3 text-right" ]
             [ button
-                [ class "text-blue-400 hover:underline mr-3" ]
+                [ class "text-blue-400 hover:underline mr-3"
+                , onClick <| OpenDeviceDetail device.id
+                ]
                 [ text "View" ]
             ]
         ]
@@ -769,7 +899,7 @@ newDeviceModal : DeviceForm
 newDeviceModal =
     { id = Nothing
     , location = 0
-    , kind = Just Sensor
+    , kind = Just SensorDevice
     , manufacturer = Just ""
     , sensors = []
     }
@@ -829,13 +959,16 @@ update msg model =
                 DetailDispatcherModal _ ->
                     ( model, Cmd.none )
 
+                DetailDeviceModal _ ->
+                    ( model, Cmd.none )
+
         SubmittedDispatcher result ->
             case result of
                 Ok _ ->
                     ( { model | modal = Closed }, getDispatchers defaultDispatchersQuery )
 
                 Err err ->
-                    ( { model | dispatchers = Failure err }, Cmd.none )
+                    ( { model | dispatchers = Failure err, modal = Closed }, Cmd.none )
 
         SubmittedDevice result ->
             case result of
@@ -843,7 +976,7 @@ update msg model =
                     ( { model | modal = Closed }, getDevices defaultDevicesQuery )
 
                 Err err ->
-                    ( { model | devices = Failure err }, Cmd.none )
+                    ( { model | devices = Failure err, modal = Closed }, Cmd.none )
 
         UpdateDispatcherForm form ->
             case model.modal of
@@ -923,6 +1056,25 @@ update msg model =
 
                 Err err ->
                     ( { model | modal = DetailDispatcherModal (Failure err) }, Cmd.none )
+
+        OpenDeviceDetail device_id ->
+            ( { model | modal = DetailDeviceModal Loading }, getDevice device_id )
+
+        GotDetailDevice result ->
+            case result of
+                Ok response ->
+                    ( { model | modal = DetailDeviceModal (Success response) }, Cmd.none )
+
+                Err err ->
+                    ( { model | modal = DetailDeviceModal (Failure err) }, Cmd.none )
+
+
+getDevice : Ulid -> Cmd Msg
+getDevice device_id =
+    Http.get
+        { url = "/api/devices/" ++ device_id
+        , expect = Http.expectJson GotDetailDevice deviceDecoder
+        }
 
 
 getDispatcher : Ulid -> Cmd Msg
@@ -1118,7 +1270,7 @@ encodeSensorForm form =
 encodeDeviceKind : DeviceKind -> Encode.Value
 encodeDeviceKind kind =
     case kind of
-        Sensor ->
+        SensorDevice ->
             Encode.string "Sensor"
 
 
@@ -1126,19 +1278,19 @@ encodeSensorKind : SensorKind -> Encode.Value
 encodeSensorKind kind =
     case kind of
         SoilMoisture ->
-            Encode.string "SoilMoisture"
+            Encode.string "soil_moisture"
 
         SoilTemp ->
-            Encode.string "SoilTemp"
+            Encode.string "soil_temp"
 
         AirTemp ->
-            Encode.string "AirTemp"
+            Encode.string "air_temp"
 
         Humidity ->
-            Encode.string "Humidity"
+            Encode.string "humidity"
 
         RainFall ->
-            Encode.string "RainFall"
+            Encode.string "rainfall"
 
 
 encodeMaybe : (a -> Encode.Value) -> Maybe a -> Encode.Value
@@ -1153,13 +1305,47 @@ encodeMaybe encoder maybeValue =
 
 deviceDecoder : Decoder Device
 deviceDecoder =
-    Decode.map6 Device
+    Decode.map7 Device
         (field "id" string)
         (field "kind" string)
         (field "state" string)
         (field "location" int)
         (maybe (field "manufacturer" string))
         (field "provisioned_at" string)
+        (field "sensors" (list sensorDecoder))
+
+
+sensorDecoder =
+    Decode.map2 Sensor
+        (field "id" string)
+        (field "kind" decodeSensorKind)
+
+
+decodeSensorKind : Decoder SensorKind
+decodeSensorKind =
+    Decode.andThen stringToSensorKindDecoder string
+
+
+stringToSensorKindDecoder : String -> Decoder SensorKind
+stringToSensorKindDecoder val =
+    case val of
+        "soil_moisture" ->
+            succeed SoilMoisture
+
+        "soil_temp" ->
+            succeed SoilTemp
+
+        "air_temp" ->
+            succeed AirTemp
+
+        "humidity" ->
+            succeed Humidity
+
+        "rainfall" ->
+            succeed RainFall
+
+        other ->
+            fail <| "Trying to decode sensor kind, but " ++ other ++ " , is not no known"
 
 
 dispatcherDecoder : Decoder Dispatcher
