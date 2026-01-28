@@ -1,3 +1,4 @@
+use color_eyre::eyre::Result;
 use ersha_core::{
     Device, DeviceId, DeviceKind, DeviceState, DeviceStatus, Dispatcher, DispatcherId,
     DispatcherState, H3Cell, Percentage, ReadingId, Sensor, SensorId, SensorKind, SensorMetric,
@@ -18,7 +19,9 @@ const URL: &str = "http://localhost:8123";
 const DATABASE: &str = "ersha_test";
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
+    color_eyre::install()?;
+
     println!("=== ClickHouse Integration Tests ===\n");
 
     // First, create the database
@@ -50,7 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn create_database() -> Result<(), Box<dyn std::error::Error>> {
+async fn create_database() -> Result<()> {
     let client = clickhouse::Client::default().with_url(URL);
     client
         .query("CREATE DATABASE IF NOT EXISTS ersha_test")
@@ -59,7 +62,7 @@ async fn create_database() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn test_dispatcher_registry() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_dispatcher_registry() -> Result<()> {
     let registry = ClickHouseDispatcherRegistry::new(URL, DATABASE).await?;
 
     let id = DispatcherId(Ulid::new());
@@ -94,7 +97,7 @@ async fn test_dispatcher_registry() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn test_device_registry() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_device_registry() -> Result<()> {
     let registry = ClickHouseDeviceRegistry::new(URL, DATABASE).await?;
 
     let id = DeviceId(Ulid::new());
@@ -139,7 +142,7 @@ async fn test_device_registry() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn test_reading_registry() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_reading_registry() -> Result<()> {
     let registry = ClickHouseReadingRegistry::new(URL, DATABASE).await?;
 
     let id = ReadingId(Ulid::new());
@@ -204,7 +207,7 @@ async fn test_reading_registry() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn test_device_status_registry() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_device_status_registry() -> Result<()> {
     let registry = ClickHouseDeviceStatusRegistry::new(URL, DATABASE).await?;
 
     let device_id = DeviceId(Ulid::new());
