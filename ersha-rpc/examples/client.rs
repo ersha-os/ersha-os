@@ -1,6 +1,10 @@
+use std::sync::Arc;
+
 use ersha_core::{DispatcherId, H3Cell, HelloRequest, HelloResponse};
 use ersha_rpc::Client;
+use ersha_tls::TlsConfig;
 use tokio::net::TcpStream;
+use tokio_rustls::{TlsConnector, rustls::pki_types::ServerName};
 use tracing::{error, info};
 
 #[tokio::main]
@@ -16,10 +20,24 @@ async fn main() {
 
     info!("connecting to server at {}", server_addr);
 
+    let rustls_config = ersha_tls::client_config(&TlsConfig {
+        cert: "./examples/keys/client.crt".into(),
+        key: "./examples/keys/client.key".into(),
+        root_ca: "./examples/keys/root_ca.crt".into(),
+        domain: "localhost".into(),
+    })
+    .expect("Unable to build client rustls config");
+    let connector = TlsConnector::from(Arc::new(rustls_config));
+
+    let server_name = ServerName::try_from("localhost").expect("Invalid `ServerName`");
+
     let stream = match TcpStream::connect(&server_addr).await {
         Ok(stream) => {
             info!("connected to server");
-            stream
+            connector
+                .connect(server_name, stream)
+                .await
+                .expect("Tls Handshake faild")
         }
         Err(e) => {
             error!("failed to connect to server: {}", e);

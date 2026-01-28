@@ -3,7 +3,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use ersha_core::{BatchUploadRequest, BatchUploadResponse, HelloRequest, HelloResponse};
 use ersha_rpc::{CancellationToken, Server};
+use ersha_tls::TlsConfig;
 use tokio::net::TcpListener;
+use tokio_rustls::TlsAcceptor;
 use tracing::{error, info};
 
 #[tokio::main]
@@ -18,6 +20,15 @@ async fn main() {
     let bind_addr = "127.0.0.1:19080".to_string();
 
     info!("starting server on {}", bind_addr);
+
+    let rusttls_config = ersha_tls::server_config(&TlsConfig {
+        cert: "./examples/keys/server.crt".into(),
+        key: "./examples/keys/server.key".into(),
+        root_ca: "./examples/keys/root_ca.crt".into(),
+        domain: "localhost".into(),
+    })
+    .expect("Unable to build rustls server config");
+    let acceptor = TlsAcceptor::from(Arc::new(rusttls_config));
 
     let listener = match TcpListener::bind(&bind_addr).await {
         Ok(listener) => {
@@ -40,7 +51,7 @@ async fn main() {
         request_count: Arc::new(AtomicUsize::new(0)),
     };
 
-    let server = Server::new(listener, state)
+    let server = Server::new(listener, state, acceptor)
         .on_ping(|_msg_id, _rpc, state| {
             let counter = state.request_count.clone();
             async move {

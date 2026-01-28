@@ -3,6 +3,7 @@
 # Variables for paths
 PRIME_DIR = ../ersha-prime/keys
 DISPATCH_DIR = ../ersha-dispatch/keys
+RPC_EXAMPLE_DIR = ../ersha-rpc/examples/keys
 
 # Default target
 all: generate move clean_intermediates
@@ -35,6 +36,8 @@ move:
 	cp server.crt server.key root_ca.crt $(PRIME_DIR)
 	mkdir -p $(DISPATCH_DIR)
 	cp client.crt client.key root_ca.crt $(DISPATCH_DIR)
+	mkdir -p $(RPC_EXAMPLE_DIR)
+	cp server.crt server.key client.crt client.key root_ca.crt $(RPC_EXAMPLE_DIR)
 
 clean_intermediates:
 	@echo "Cleaning up CSRs and raw keys..."

@@ -324,6 +324,7 @@ async fn run_data_collector<S>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn run_uploader<S>(
     storage: S,
     prime_addr: std::net::SocketAddr,
