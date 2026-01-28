@@ -9,12 +9,12 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "tailwindcss": "^4.1.18",
     "typescript": "~5.9.3",
     "vite": "^7.2.4"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
-    "tailwindcss": "^4.1.18",
     "vite-plugin-elm": "^3.0.1"
   }
 }
