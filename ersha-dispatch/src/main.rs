@@ -3,11 +3,16 @@ use std::time::Duration;
 
 use axum::{Router, routing::get};
 use clap::Parser;
-use ersha_core::{BatchId, BatchUploadRequest, DispatcherId, H3Cell, HelloRequest, HelloResponse};
+use ersha_core::{
+    AlertId, AlertRequest, AlertSeverity, AlertType, BatchId, BatchUploadRequest,
+    DeviceDisconnectionRequest, DispatcherId, DispatcherStatusRequest, H3Cell, HelloRequest,
+    HelloResponse, SensorState,
+};
 use ersha_dispatch::edge::tcp::TcpEdgeReceiver;
 use ersha_dispatch::{
-    Config, DeviceStatusStorage, EdgeConfig, EdgeData, EdgeReceiver, MemoryStorage,
-    MockEdgeReceiver, SensorReadingsStorage, SqliteStorage, StorageConfig,
+    Config, DeviceStatusStorage, DispatcherState, EdgeConfig, EdgeData, EdgeReceiver,
+    MemoryStorage, MockEdgeReceiver, PrimeEvent, SensorReadingsStorage, SqliteStorage,
+    StorageConfig,
 };
 use ersha_rpc::Client;
 use tokio::net::{TcpListener, TcpStream};
@@ -87,6 +92,7 @@ where
     <S as DeviceStatusStorage>::Error: std::error::Error + Send + Sync + 'static,
 {
     let cancel = CancellationToken::new();
+    let state = DispatcherState::new();
 
     // Create edge receiver based on config
     match &config.edge {
@@ -107,13 +113,31 @@ where
                 *status_interval_secs,
                 *device_count,
             );
-            run_edge_receiver(receiver, cancel, storage, dispatcher_id, location, config).await?;
+            run_edge_receiver(
+                receiver,
+                cancel,
+                storage,
+                dispatcher_id,
+                location,
+                config,
+                state,
+            )
+            .await?;
         }
         EdgeConfig::Tcp { addr } => {
             info!(?addr, "Started TCP edge receiver");
 
-            let receiver = TcpEdgeReceiver::new(*addr, dispatcher_id);
-            run_edge_receiver(receiver, cancel, storage, dispatcher_id, location, config).await?;
+            let receiver = TcpEdgeReceiver::new(*addr, dispatcher_id, state.clone());
+            run_edge_receiver(
+                receiver,
+                cancel,
+                storage,
+                dispatcher_id,
+                location,
+                config,
+                state,
+            )
+            .await?;
         }
     };
 
@@ -127,6 +151,7 @@ async fn run_edge_receiver<E: EdgeReceiver, S>(
     dispatcher_id: DispatcherId,
     location: H3Cell,
     config: Config,
+    state: DispatcherState,
 ) -> color_eyre::Result<()>
 where
     S: SensorReadingsStorage + DeviceStatusStorage + Clone + Send + Sync + 'static,
@@ -139,13 +164,22 @@ where
     // Spawn data collector task
     let storage_for_collector = storage.clone();
     let cancel_for_collector = cancel.clone();
+    let state_for_collector = state.clone();
     let collector_handle = tokio::spawn(async move {
-        run_data_collector(edge_rx, storage_for_collector, cancel_for_collector).await;
+        run_data_collector(
+            edge_rx,
+            storage_for_collector,
+            cancel_for_collector,
+            state_for_collector,
+            dispatcher_id,
+        )
+        .await;
     });
 
     // Spawn uploader task
     let storage_for_uploader = storage.clone();
     let cancel_for_uploader = cancel.clone();
+    let state_for_uploader = state.clone();
     let prime_addr = config.prime.rpc_addr;
     let upload_interval = Duration::from_secs(config.prime.upload_interval_secs);
     let uploader_handle = tokio::spawn(async move {
@@ -156,6 +190,7 @@ where
             location,
             upload_interval,
             cancel_for_uploader,
+            state_for_uploader,
         )
         .await;
     });
@@ -195,6 +230,8 @@ async fn run_data_collector<S>(
     mut edge_rx: mpsc::Receiver<EdgeData>,
     storage: S,
     cancel: CancellationToken,
+    state: DispatcherState,
+    dispatcher_id: DispatcherId,
 ) where
     S: SensorReadingsStorage + DeviceStatusStorage,
     <S as SensorReadingsStorage>::Error: std::error::Error,
@@ -220,6 +257,56 @@ async fn run_data_collector<S>(
                     }
                     EdgeData::Status(status) => {
                         let status_id = status.id;
+                        let device_id = status.device_id;
+
+                        // Check for critical battery (< 10%)
+                        if status.battery_percent.0 < 10 {
+                            let alert = AlertRequest {
+                                id: AlertId(Ulid::new()),
+                                dispatcher_id,
+                                device_id: Some(device_id),
+                                severity: AlertSeverity::Critical,
+                                alert_type: AlertType::CriticalBattery,
+                                message: format!(
+                                    "Device battery critically low: {}%",
+                                    status.battery_percent.0
+                                )
+                                .into(),
+                                timestamp: jiff::Timestamp::now(),
+                            };
+                            state.queue_alert(alert).await;
+                            warn!(
+                                device_id = ?device_id,
+                                battery_percent = status.battery_percent.0,
+                                "Critical battery alert queued"
+                            );
+                        }
+
+                        // Check for sensor failures
+                        for sensor_status in status.sensor_statuses.iter() {
+                            if sensor_status.state == SensorState::Faulty {
+                                let alert = AlertRequest {
+                                    id: AlertId(Ulid::new()),
+                                    dispatcher_id,
+                                    device_id: Some(device_id),
+                                    severity: AlertSeverity::Warning,
+                                    alert_type: AlertType::SensorFailure,
+                                    message: format!(
+                                        "Sensor {:?} reported faulty state",
+                                        sensor_status.sensor_id
+                                    )
+                                    .into(),
+                                    timestamp: jiff::Timestamp::now(),
+                                };
+                                state.queue_alert(alert).await;
+                                warn!(
+                                    device_id = ?device_id,
+                                    sensor_id = ?sensor_status.sensor_id,
+                                    "Sensor failure alert queued"
+                                );
+                            }
+                        }
+
                         if let Err(e) = DeviceStatusStorage::store(&storage, status).await {
                             error!(error = ?e, status_id = ?status_id, "Failed to store status");
                         } else {
@@ -239,6 +326,7 @@ async fn run_uploader<S>(
     location: H3Cell,
     upload_interval: Duration,
     cancel: CancellationToken,
+    state: DispatcherState,
 ) where
     S: SensorReadingsStorage + DeviceStatusStorage,
     <S as SensorReadingsStorage>::Error: std::error::Error,
@@ -279,6 +367,60 @@ async fn run_uploader<S>(
                 }
 
                 let c = client.as_ref().unwrap();
+
+                // Send dispatcher status
+                let pending_events = state.take_pending_events().await;
+                let status_request = DispatcherStatusRequest {
+                    dispatcher_id,
+                    connected_devices: state.connected_count().await,
+                    uptime_seconds: state.uptime_secs().await,
+                    pending_uploads: pending_events.len() as u32,
+                    timestamp: jiff::Timestamp::now(),
+                };
+
+                match c.dispatcher_status(status_request).await {
+                    Ok(_) => {
+                        tracing::debug!("Dispatcher status sent to ersha-prime");
+                    }
+                    Err(e) => {
+                        error!(error = ?e, "Failed to send dispatcher status, will reconnect");
+                        client = None;
+                        continue;
+                    }
+                }
+
+                // Process pending events (disconnections and alerts)
+                for event in pending_events {
+                    match event {
+                        PrimeEvent::DeviceDisconnection { device_id, reason } => {
+                            let request = DeviceDisconnectionRequest {
+                                device_id,
+                                dispatcher_id,
+                                timestamp: jiff::Timestamp::now(),
+                                reason: Some(reason),
+                            };
+                            match c.device_disconnection(request).await {
+                                Ok(_) => {
+                                    info!(device_id = ?device_id, "Device disconnection sent to ersha-prime");
+                                }
+                                Err(e) => {
+                                    error!(error = ?e, device_id = ?device_id, "Failed to send device disconnection");
+                                }
+                            }
+                        }
+                        PrimeEvent::Alert(alert) => {
+                            let alert_id = alert.id;
+                            match c.alert(alert).await {
+                                Ok(_) => {
+                                    info!(alert_id = ?alert_id, "Alert sent to ersha-prime");
+                                }
+                                Err(e) => {
+                                    error!(error = ?e, alert_id = ?alert_id, "Failed to send alert");
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Fetch pending data
                 let readings = match SensorReadingsStorage::fetch_pending(&storage).await {

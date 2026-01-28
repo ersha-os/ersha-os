@@ -12,7 +12,11 @@ use tracing::{Span, error, field, info, instrument, warn};
 use ulid::Ulid;
 
 use super::{EdgeData, EdgeReceiver};
-use ersha_core::{DeviceId, DispatcherId, H3Cell, Percentage, ReadingId, SensorId, SensorReading};
+use crate::state::DispatcherState;
+use ersha_core::{
+    DeviceId, DisconnectionReason, DispatcherId, H3Cell, Percentage, ReadingId, SensorId,
+    SensorReading,
+};
 use ersha_edge::{
     ReadingPacket,
     transport::{Msg, MsgType, PACKET_PREAMBLE},
@@ -39,13 +43,15 @@ pub enum EdgeConnectionError {
 pub struct TcpEdgeReceiver {
     addr: SocketAddr,
     dispatcher_id: DispatcherId,
+    state: DispatcherState,
 }
 
 impl TcpEdgeReceiver {
-    pub fn new(addr: SocketAddr, dispatcher_id: DispatcherId) -> Self {
+    pub fn new(addr: SocketAddr, dispatcher_id: DispatcherId, state: DispatcherState) -> Self {
         Self {
             addr,
             dispatcher_id,
+            state,
         }
     }
 }
@@ -64,7 +70,13 @@ impl EdgeReceiver for TcpEdgeReceiver {
         let listener = TcpListener::bind(addr).await?;
         info!(%addr, "TCP edge receiver started");
 
-        tokio::spawn(run_server_loop(listener, tx, cancel, self.dispatcher_id));
+        tokio::spawn(run_server_loop(
+            listener,
+            tx,
+            cancel,
+            self.dispatcher_id,
+            self.state.clone(),
+        ));
 
         Ok(rx)
     }
@@ -76,6 +88,7 @@ async fn run_server_loop(
     tx: mpsc::Sender<EdgeData>,
     cancel: CancellationToken,
     dispatcher_id: DispatcherId,
+    state: DispatcherState,
 ) {
     info!("TCP edge receiver server started");
 
@@ -93,10 +106,14 @@ async fn run_server_loop(
                         let cancel = cancel.clone();
                         let tx = tx.clone();
                         let dispatcher_id = dispatcher_id;
+                        let state = state.clone();
 
                         tokio::spawn(async move {
                             async move {
-                                if let Err(e) = handle_edge_device(stream, tx, cancel, dispatcher_id).await {
+                                if let Err(e) =
+                                    handle_edge_device(stream, tx, cancel, dispatcher_id, state)
+                                        .await
+                                {
                                     error!(error = %e, "Connection closed with error");
                                 }
                             }
@@ -126,13 +143,14 @@ fn is_transient_error(e: &std::io::Error) -> bool {
 }
 
 #[instrument(
-    name = "edge_handler", skip(stream, tx, cancel), fields(device_id = field::Empty, ?dispatcher_id)
+    name = "edge_handler", skip(stream, tx, cancel, state), fields(device_id = field::Empty, ?dispatcher_id)
 )]
 async fn handle_edge_device(
     mut stream: TcpStream,
     tx: mpsc::Sender<EdgeData>,
     cancel: CancellationToken,
     dispatcher_id: DispatcherId,
+    state: DispatcherState,
 ) -> Result<(), EdgeConnectionError> {
     let mut hello = [0u8; 5];
     stream.read_exact(&mut hello).await?;
@@ -149,11 +167,17 @@ async fn handle_edge_device(
 
     Span::current().record("device_id", field::display(&device_ulid));
 
+    let device_id = DeviceId(device_ulid);
+
     stream.write_all(&device_ulid.0.to_be_bytes()).await?;
     info!("Handshake complete, device ID assigned");
 
+    // Track device connection
+    state.device_connected(device_id).await;
+
     let mut buf: Vec<u8> = Vec::with_capacity(128);
     let mut tmp = [0u8; 256];
+    let mut disconnection_reason = DisconnectionReason::GracefulClose;
 
     loop {
         tokio::select! {
@@ -168,7 +192,11 @@ async fn handle_edge_device(
                         break;
                     }
                     Ok(n) => n,
-                    Err(e) => return Err(EdgeConnectionError::Io(e)),
+                    Err(e) => {
+                        disconnection_reason = DisconnectionReason::Error(e.to_string().into());
+                        state.device_disconnected(device_id, disconnection_reason).await;
+                        return Err(EdgeConnectionError::Io(e));
+                    }
                 };
 
                 buf.extend_from_slice(&tmp[..n]);
@@ -177,10 +205,16 @@ async fn handle_edge_device(
                     let (msg, rest) = match postcard::take_from_bytes::<Msg>(&buf) {
                         Ok(v) => v,
                         Err(postcard::Error::DeserializeUnexpectedEnd) => break,
-                        Err(e) => return Err(EdgeConnectionError::Postcard(e)),
+                        Err(e) => {
+                            disconnection_reason = DisconnectionReason::Error(e.to_string().into());
+                            state.device_disconnected(device_id, disconnection_reason).await;
+                            return Err(EdgeConnectionError::Postcard(e));
+                        }
                     };
 
                     if msg.preamble != PACKET_PREAMBLE {
+                        disconnection_reason = DisconnectionReason::Error("Invalid preamble".into());
+                        state.device_disconnected(device_id, disconnection_reason).await;
                         return Err(EdgeConnectionError::InvalidPreamble(msg.preamble));
                     }
 
@@ -194,7 +228,7 @@ async fn handle_edge_device(
 
                             let reading = EdgeData::Reading(SensorReading {
                                 id: ReadingId(Ulid::new()),
-                                device_id: DeviceId(device_ulid),
+                                device_id,
                                 dispatcher_id,
                                 metric: convert_metric(packet.metric),
                                 location: H3Cell(location_raw),
@@ -205,6 +239,8 @@ async fn handle_edge_device(
 
                             if tx.send(reading).await.is_err() {
                                 error!("Internal dispatcher channel closed");
+                                disconnection_reason = DisconnectionReason::Error("Channel closed".into());
+                                state.device_disconnected(device_id, disconnection_reason).await;
                                 return Err(EdgeConnectionError::ChannelClosed);
                             }
                         }
@@ -215,6 +251,11 @@ async fn handle_edge_device(
             }
         }
     }
+
+    // Track device disconnection (for graceful close or shutdown)
+    state
+        .device_disconnected(device_id, disconnection_reason)
+        .await;
 
     Ok(())
 }
