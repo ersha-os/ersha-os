@@ -33,13 +33,14 @@ ersha
 ├── ersha-core       # Shared domain types and logic
 ├── ersha-dashboard  # Web dashboard (UI + e2e tests)
 ├── ersha-edge       # Edge-side SDK for embedded devices (no_std friendly)
+├── examples         # Examples of use case of the ersha layers
 ```
 
 ---
 
 ## Crates
 
-### `ersha-rpc`
+### [`ersha-rpc`](ersha-rpc)
 
 Transport-agnostic RPC layer.
 
@@ -49,7 +50,7 @@ Transport-agnostic RPC layer.
 
 ---
 
-### `ersha-dispatch`
+### [`ersha-dispatch`](ersha-dispatch)
 
 Ingress service for edge devices.
 
@@ -59,7 +60,7 @@ Ingress service for edge devices.
 
 ---
 
-### `ersha-prime`
+### [`ersha-prime`](ersha-prime)
 
 Primary backend service.
 
@@ -70,13 +71,13 @@ Primary backend service.
 
 ---
 
-### `ersha-core`
+### [`ersha-core`](ersha-core)
 
 Shared core types and domain logic used across crates.
 
 ---
 
-### `ersha-dashboard`
+### [`ersha-dashboard`](ersha-dashboard)
 
 Web dashboard for monitoring devices and readings.
 
@@ -86,7 +87,7 @@ Web dashboard for monitoring devices and readings.
 
 ---
 
-### `ersha-edge`
+### [`ersha-edge`](ersha-edge)
 
 Edge client library used on embedded devices.
 
@@ -95,10 +96,10 @@ Edge client library used on embedded devices.
 * Transport abstraction
 * Designed for constrained environments
 
-See `ersha-edge/README.md` for details.
+See [`ersha-edge/README.md`](ersha-edge/README.md) for details.
 
 ---
 
 ## License
 
-Licensed under the terms of the MIT License. See `LICENSE` for details.
+Licensed under the terms of the MIT License. See [`LICENSE`](LICENSE) for details.
