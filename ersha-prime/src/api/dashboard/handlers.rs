@@ -86,9 +86,9 @@ where
         DeviceFilter, DeviceSortBy, Pagination, QueryOptions, SortOrder,
     };
 
-    let limit = pagination.limit.unwrap_or(50).min(200) as usize; // Convert to usize
+    let limit = pagination.limit.unwrap_or(50).min(200) as usize; 
     let page = pagination.page.unwrap_or(1);
-    let offset = ((page - 1) * limit as u64) as usize; // Convert to usize
+    let offset = ((page - 1) * limit as u64) as usize; 
 
     let options = QueryOptions {
         filter: DeviceFilter::default(),
@@ -100,7 +100,7 @@ where
     let devices = state.device_registry.list(options).await
         .map_err(|e| DashboardError::Internal(e.to_string()))?;
     
-    // In a real implementation, you'd get total count from registry
+    
     let total = devices.len() as u64;
     
     let response = PaginatedResponse {
