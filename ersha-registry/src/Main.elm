@@ -113,83 +113,81 @@ view model =
     }
 
 
-viewDeviceModal : DeviceForm -> Html Msg
-viewDeviceModal form =
+viewModal : { title : String, body : Html Msg, footer : List (Html Msg) } -> Html Msg
+viewModal config =
     div [ class "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" ]
         [ div [ class "bg-[#181b1f] border border-[#2c2c2e] rounded-md shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" ]
             [ -- Header
               div [ class "bg-[#222529] px-6 py-4 border-b border-[#2c2c2e] flex justify-between items-center" ]
-                [ h3 [ class "text-[#d8d9da] text-sm font-bold uppercase tracking-wider" ] [ text "Register New Device" ]
+                [ h3 [ class "text-[#d8d9da] text-sm font-bold uppercase tracking-wider" ] [ text config.title ]
                 , button [ class "text-gray-500 hover:text-white", onClick CloseModal ] [ text "✕" ]
                 ]
 
-            -- Scrollable Body
-            , div [ class "p-6 space-y-6 overflow-y-auto" ]
-                [ -- Basic Info Section
-                  div [ class "grid grid-cols-2 gap-4" ]
-                    [ viewInput "Device ID (Optional)"
-                        (Maybe.withDefault "" form.id)
-                        (\val ->
-                            UpdateDeviceForm
-                                { form
-                                    | id =
-                                        if val == "" then
-                                            Nothing
-
-                                        else
-                                            Just val
-                                }
-                        )
-                    , div [ class "space-y-1.5" ]
-                        [ label [ class "text-xs font-semibold text-orange-400 uppercase" ] [ text "H3 Cell Index" ]
-                        , input
-                            [ type_ "number"
-                            , class "w-full bg-[#0b0c0e] border border-[#2c2c2e] text-[#d8d9da] rounded px-3 py-2 text-sm font-mono focus:border-orange-500 focus:outline-none transition-colors"
-                            , value (String.fromInt form.location)
-                            , onInput (\val -> UpdateDeviceForm { form | location = String.toInt val |> Maybe.withDefault 0 })
-                            ]
-                            []
-                        , p [ class "text-[10px] text-gray-500 italic" ] [ text "Specify the hexagonal grid index for geographic dispatching." ]
-                        ]
-                    ]
-                , div [ class "grid grid-cols-2 gap-4" ]
-                    [ viewSelect "Manufacturer" (Maybe.withDefault "" form.manufacturer) [ "Sony", "Bosch", "Ersha-Custom" ] (\val -> UpdateDeviceForm { form | manufacturer = Just val })
-                    , viewSelect "Device Kind" "Sensor" [ "Sensor" ] (\_ -> UpdateDeviceForm { form | kind = Just Sensor })
-                    ]
-
-                -- Dynamic Sensors Section
-                , div [ class "space-y-4" ]
-                    [ div [ class "flex justify-between items-center border-b border-[#2c2c2e] pb-2" ]
-                        [ h4 [ class "text-xs font-bold text-gray-500 uppercase" ] [ text "Attached Sensors" ]
-                        , button
-                            [ class "text-xs bg-blue-600/20 text-blue-400 border border-blue-500/50 px-2 py-1 rounded hover:bg-blue-600/40 transition"
-                            , onClick AddSensor
-                            ]
-                            [ text "+ Add Sensor" ]
-                        ]
-                    , if List.isEmpty form.sensors then
-                        p [ class "text-xs text-gray-600 italic" ] [ text "No sensors added yet." ]
-
-                      else
-                        div [ class "space-y-3" ] (List.indexedMap viewSensorRow form.sensors)
-                    ]
-                ]
+            -- Body
+            , div [ class "p-6 space-y-6 overflow-y-auto" ] [ config.body ]
 
             -- Footer
-            , div [ class "bg-[#222529] px-6 py-4 flex justify-end gap-3 border-t border-[#2c2c2e]" ]
-                [ button [ class "text-[#d8d9da] hover:bg-[#2c2c2e] px-4 py-2 rounded text-sm", onClick CloseModal ] [ text "Cancel" ]
-                , button
-                    [ class "bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded text-sm font-bold transition"
-                    , onClick (SubmitForm (DeviceModal form))
-                    ]
-                    [ text "Provision Device" ]
-                ]
+            , div [ class "bg-[#222529] px-6 py-4 flex justify-end gap-3 border-t border-[#2c2c2e]" ] config.footer
             ]
         ]
 
 
-viewInput : String -> String -> (String -> Msg) -> Html Msg
-viewInput labelText currentVal toMsg =
+viewOptionalInput : String -> Maybe String -> String -> (Maybe String -> Msg) -> Html Msg
+viewOptionalInput label current placeHolder toMsg =
+    viewInput label
+        (Maybe.withDefault "" current)
+        placeHolder
+        (\val ->
+            toMsg
+                (if val == "" then
+                    Nothing
+
+                 else
+                    Just val
+                )
+        )
+
+
+viewDeviceModal : DeviceForm -> Html Msg
+viewDeviceModal form =
+    viewModal
+        { title = "Register New Device"
+        , body =
+            div [ class "space-y-6" ]
+                [ div [ class "grid grid-cols-2 gap-4" ]
+                    [ viewOptionalInput "Device ID (Optional)" form.id "Leave blank to auto-generate" (\id -> UpdateDeviceForm { form | id = id })
+                    , viewInput "H3 Cell Index" (String.fromInt form.location) "" (\val -> UpdateDeviceForm { form | location = String.toInt val |> Maybe.withDefault 0 })
+                    ]
+                , div [ class "grid grid-cols-2 gap-4" ]
+                    [ viewSelect "Manufacturer" (Maybe.withDefault "H3Cell Hexgon index" form.manufacturer) [ "Sony", "Bosch", "Ersha-Custom" ] (\val -> UpdateDeviceForm { form | manufacturer = Just val })
+                    , viewSelect "Device Kind" "Sensor" [ "Sensor" ] (\_ -> UpdateDeviceForm { form | kind = Just Sensor })
+                    ]
+                , viewSensorSection form
+                ]
+        , footer =
+            [ button [ class "text-[#d8d9da] hover:bg-[#2c2c2e] px-4 py-2 rounded text-sm", onClick CloseModal ] [ text "Cancel" ]
+            , button [ class "bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded text-sm font-bold", onClick (SubmitForm (DeviceModal form)) ] [ text "Provision Device" ]
+            ]
+        }
+
+
+viewSensorSection : DeviceForm -> Html Msg
+viewSensorSection form =
+    div [ class "space-y-4" ]
+        [ div [ class "flex justify-between items-center border-b border-[#2c2c2e] pb-2" ]
+            [ h4 [ class "text-xs font-bold text-gray-500 uppercase" ] [ text "Attached Sensors" ]
+            , button [ class "text-xs bg-blue-600/20 text-blue-400 border border-blue-500/50 px-2 py-1 rounded", onClick AddSensor ] [ text "+ Add Sensor" ]
+            ]
+        , if List.isEmpty form.sensors then
+            p [ class "text-xs text-gray-600 italic" ] [ text "No sensors added yet." ]
+
+          else
+            div [ class "space-y-3" ] (List.indexedMap viewSensorRow form.sensors)
+        ]
+
+
+viewInput : String -> String -> String -> (String -> Msg) -> Html Msg
+viewInput labelText currentVal placeHoldr toMsg =
     div [ class "flex flex-col gap-1.5 w-full" ]
         [ label [ class "text-[10px] font-bold text-orange-400 uppercase tracking-tight" ]
             [ text labelText ]
@@ -198,6 +196,7 @@ viewInput labelText currentVal toMsg =
             , class "bg-[#0b0c0e] border border-[#2c2c2e] text-[#d8d9da] rounded px-3 py-2 text-sm font-mono focus:border-orange-500 focus:outline-none transition-all placeholder:text-gray-700"
             , value currentVal
             , onInput toMsg
+            , placeholder placeHoldr
             ]
             []
         ]
@@ -214,8 +213,7 @@ viewSelect labelText currentVal options toMsg =
                 , onInput toMsg
                 ]
                 (List.map (\opt -> option [ value opt, selected (opt == currentVal) ] [ text opt ]) options)
-            , -- Custom dropdown arrow
-              div [ class "absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-500 text-[10px]" ]
+            , div [ class "absolute inset-y-0 right-3 flex items-center pointer-events-none text-gray-500 text-[10px]" ]
                 [ text "▼" ]
             ]
         ]
@@ -227,6 +225,7 @@ viewSensorRow index sensor =
         [ div [ class "flex items-start gap-3" ]
             [ div [ class "flex-1" ]
                 [ viewInput "Sensor ID (Optional)"
+                    "Sensor Ulid"
                     (Maybe.withDefault "" sensor.id)
                     (\val ->
                         UpdateSensor index
@@ -287,74 +286,18 @@ stringToSensorKind val =
 
 viewDispatcherModal : DispatcherForm -> Html Msg
 viewDispatcherModal form =
-    div [ class "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" ]
-        [ -- Modal Container
-          div [ class "bg-[#181b1f] border border-[#2c2c2e] rounded-md shadow-2xl w-full max-w-md overflow-hidden" ]
-            [ -- Header
-              div [ class "bg-[#222529] px-6 py-4 border-b border-[#2c2c2e] flex justify-between items-center" ]
-                [ h3 [ class "text-[#d8d9da] text-sm font-bold uppercase tracking-wider" ] [ text "Register Dispatcher" ]
-                , button
-                    [ class "text-gray-500 hover:text-white transition-colors"
-                    , onClick CloseModal
-                    ]
-                    [ text "✕" ]
+    viewModal
+        { title = "Register Dispatcher"
+        , body =
+            div [ class "space-y-5" ]
+                [ viewOptionalInput "Dispatcher ID (Optional)" form.id "Leave blank to auto-generate" (\id -> UpdateDispatcherForm { form | id = id })
+                , viewInput "H3 Cell Index" (String.fromInt form.location) "H3Cell Hexagon index" (\val -> UpdateDispatcherForm { form | location = String.toInt val |> Maybe.withDefault 0 })
                 ]
-
-            -- Body / Form
-            , div [ class "p-6 space-y-5" ]
-                [ -- ID Field
-                  div [ class "space-y-1.5" ]
-                    [ label [ class "text-xs font-semibold text-orange-400 uppercase" ] [ text "Dispatcher ID (Optional)" ]
-                    , input
-                        [ type_ "text"
-                        , placeholder "Leave blank to auto-generate"
-                        , class "w-full bg-[#0b0c0e] border border-[#2c2c2e] text-[#d8d9da] rounded px-3 py-2 text-sm font-mono focus:border-orange-500 focus:outline-none transition-colors"
-                        , value (Maybe.withDefault "" form.id)
-                        , onInput
-                            (\val ->
-                                UpdateDispatcherForm
-                                    { form
-                                        | id =
-                                            if val == "" then
-                                                Nothing
-
-                                            else
-                                                Just val
-                                    }
-                            )
-                        ]
-                        []
-                    ]
-
-                -- Location Field
-                , div [ class "space-y-1.5" ]
-                    [ label [ class "text-xs font-semibold text-orange-400 uppercase" ] [ text "H3 Cell Index" ]
-                    , input
-                        [ type_ "number"
-                        , class "w-full bg-[#0b0c0e] border border-[#2c2c2e] text-[#d8d9da] rounded px-3 py-2 text-sm font-mono focus:border-orange-500 focus:outline-none transition-colors"
-                        , value (String.fromInt form.location)
-                        , onInput (\val -> UpdateDispatcherForm { form | location = String.toInt val |> Maybe.withDefault 0 })
-                        ]
-                        []
-                    , p [ class "text-[10px] text-gray-500 italic" ] [ text "Specify the hexagonal grid index for geographic dispatching." ]
-                    ]
-                ]
-
-            -- Footer / Actions
-            , div [ class "bg-[#222529] px-6 py-4 flex justify-end gap-3" ]
-                [ button
-                    [ class "px-4 py-2 text-sm font-medium text-[#d8d9da] hover:bg-[#2c2c2e] rounded transition-colors"
-                    , onClick CloseModal
-                    ]
-                    [ text "Cancel" ]
-                , button
-                    [ class "px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-500 rounded shadow-lg shadow-orange-900/20 transition-all active:scale-95"
-                    , onClick (SubmitForm (DispatcherModal form))
-                    ]
-                    [ text "Register Dispatcher" ]
-                ]
+        , footer =
+            [ button [ class "px-4 py-2 text-sm text-[#d8d9da] hover:bg-[#2c2c2e] rounded", onClick CloseModal ] [ text "Cancel" ]
+            , button [ class "px-4 py-2 text-sm text-white bg-orange-600 rounded shadow-lg shadow-orange-900/20", onClick (SubmitForm (DispatcherModal form)) ] [ text "Register" ]
             ]
-        ]
+        }
 
 
 mainContent : Model -> Html Msg
@@ -455,8 +398,7 @@ viewRemoteContent label remoteData successView =
 
         Loading ->
             div [ class "flex flex-col items-center justify-center p-12 space-y-4" ]
-                [ -- Grafana-style spinner
-                  div [ class "w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" ] []
+                [ div [ class "w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" ] []
                 , p [ class "text-sm text-gray-500 font-mono animate-pulse" ] [ text ("Loading " ++ label ++ "...") ]
                 ]
 
@@ -473,10 +415,6 @@ viewRemoteContent label remoteData successView =
 
         Success data ->
             successView data
-
-
-
--- Helper for empty/initial states
 
 
 viewPlaceholder : String -> Html Msg
@@ -736,12 +674,9 @@ update msg model =
         SubmittedDispatcher result ->
             case result of
                 Ok _ ->
-                    -- Refresh list and close modal on success
                     ( { model | modal = Closed }, getDispatchers )
 
                 Err err ->
-                    -- In a real app, you might want to attach this error
-                    -- specifically to the form state
                     ( { model | dispatchers = Failure err }, Cmd.none )
 
         SubmittedDevice result ->
