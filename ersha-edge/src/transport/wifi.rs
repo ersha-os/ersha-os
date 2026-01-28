@@ -1,44 +1,23 @@
-use crate::{DeviceId, Error, H3Cell, ReadingPacket};
-
 use embassy_net::{
     IpAddress, IpEndpoint, Stack,
     tcp::{State, TcpSocket},
 };
-use serde::Deserialize;
-use serde::Serialize;
+
+use crate::{DeviceId, Error, H3Cell, ReadingPacket};
+
+use super::MAX_PACKET_SIZE;
+use super::Transport;
+
+use super::MAX_PAYLOAD_SIZE;
+use super::Msg;
+use super::MsgType;
+use super::PACKET_PREAMBLE;
+use super::PROTOCOL_VERSION;
 
 const SERVER_ADDR: IpEndpoint = IpEndpoint {
     addr: IpAddress::v4(10, 46, 238, 14),
     port: 9001,
 };
-
-pub const PACKET_PREAMBLE: u16 = 0xE45A;
-pub const PROTOCOL_VERSION: u8 = 0x01;
-pub const MAX_PACKET_SIZE: usize = 128;
-pub const PREAMBLE_SIZE: usize = 2;
-pub const PACKET_HEADER_SIZE: usize = 6;
-pub const MAX_PAYLOAD_SIZE: usize = MAX_PACKET_SIZE - PREAMBLE_SIZE - PACKET_HEADER_SIZE;
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum MsgType {
-    Reading,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Msg<'a> {
-    pub preamble: u16,
-    pub version: u8,
-    pub msg_type: MsgType,
-    pub payload: &'a [u8],
-}
-
-pub trait Transport {
-    /// Called once after network join / connect
-    fn provision(&mut self, location: H3Cell) -> impl Future<Output = Result<DeviceId, Error>>;
-
-    /// Send a single sensor reading
-    fn send_reading(&mut self, packet: &ReadingPacket) -> impl Future<Output = Result<(), Error>>;
-}
 
 pub struct Wifi<'a> {
     socket: TcpSocket<'a>,
