@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::{Router, routing::get};
@@ -15,8 +16,11 @@ use ersha_dispatch::{
     StorageConfig,
 };
 use ersha_rpc::Client;
+use ersha_tls::TlsConfig;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
+use tokio_rustls::TlsConnector;
+use tokio_rustls::rustls::pki_types::ServerName;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 use ulid::Ulid;
@@ -191,6 +195,7 @@ where
             upload_interval,
             cancel_for_uploader,
             state_for_uploader,
+            config.tls,
         )
         .await;
     });
@@ -327,6 +332,7 @@ async fn run_uploader<S>(
     upload_interval: Duration,
     cancel: CancellationToken,
     state: DispatcherState,
+    tls_config: TlsConfig,
 ) where
     S: SensorReadingsStorage + DeviceStatusStorage,
     <S as SensorReadingsStorage>::Error: std::error::Error,
@@ -352,7 +358,7 @@ async fn run_uploader<S>(
             _ = interval.tick() => {
                 // Ensure we have a connected and registered client
                 if client.is_none() {
-                    match connect_and_register(prime_addr, dispatcher_id, location).await {
+                    match connect_and_register(prime_addr, dispatcher_id, location, &tls_config).await {
                         Ok(c) => {
                             client = Some(c);
                             backoff = Duration::from_secs(1);
@@ -488,9 +494,18 @@ async fn connect_and_register(
     prime_addr: std::net::SocketAddr,
     dispatcher_id: DispatcherId,
     location: H3Cell,
+    tls_config: &TlsConfig,
 ) -> color_eyre::Result<Client> {
     let stream = TcpStream::connect(prime_addr).await?;
-    let client = Client::new(stream);
+
+    let rustls_config = ersha_tls::client_config(&tls_config)?;
+    let connector = TlsConnector::from(Arc::new(rustls_config));
+
+    let server_name = ServerName::try_from(tls_config.domain.clone())?;
+
+    let tls_stream = connector.connect(server_name, stream).await?;
+
+    let client = Client::new(tls_stream);
 
     let hello = HelloRequest {
         dispatcher_id,

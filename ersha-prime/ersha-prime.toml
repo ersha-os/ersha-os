@@ -9,3 +9,5 @@ type = "memory"
 # [registry]
 # type = "sqlite"
 # path = "ersha-prime.db"
+
+[tls]

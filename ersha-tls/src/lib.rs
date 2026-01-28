@@ -29,9 +29,10 @@ pub enum TlsError {
 
 #[derive(Debug, Deserialize)]
 pub struct TlsConfig {
-    cert: PathBuf,
-    key: PathBuf,
-    root_ca: PathBuf,
+    pub cert: PathBuf,
+    pub key: PathBuf,
+    pub root_ca: PathBuf,
+    pub domain: String,
 }
 
 impl Default for TlsConfig {
@@ -40,6 +41,7 @@ impl Default for TlsConfig {
             cert: PathBuf::from("./keys/cert.pem"),
             key: PathBuf::from("./keys/private.key"),
             root_ca: PathBuf::from("./keys/rootCA.pem"),
+            domain: String::from("localhost"),
         }
     }
 }

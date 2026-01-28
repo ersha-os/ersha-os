@@ -1,5 +1,5 @@
-use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::{net::SocketAddr, sync::Arc};
 
 use axum::routing::get;
 use clap::Parser;
@@ -29,7 +29,9 @@ use ersha_prime::{
     },
 };
 use ersha_rpc::Server;
+use ersha_tls::TlsConfig;
 use tokio::net::TcpListener;
+use tokio_rustls::TlsAcceptor;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
@@ -92,6 +94,7 @@ async fn main() -> color_eyre::Result<()> {
                 device_status_registry,
                 config.server.rpc_addr,
                 config.server.http_addr,
+                config.tls,
             )
             .await?;
         }
@@ -109,6 +112,7 @@ async fn main() -> color_eyre::Result<()> {
                 device_status_registry,
                 config.server.rpc_addr,
                 config.server.http_addr,
+                config.tls,
             )
             .await?;
         }
@@ -126,6 +130,7 @@ async fn main() -> color_eyre::Result<()> {
                 device_status_registry,
                 config.server.rpc_addr,
                 config.server.http_addr,
+                config.tls,
             )
             .await?;
         }
@@ -141,6 +146,7 @@ async fn run_server<D, Dev, R, S>(
     device_status_registry: S,
     rpc_addr: SocketAddr,
     http_addr: SocketAddr,
+    tls_config: TlsConfig,
 ) -> color_eyre::Result<()>
 where
     D: DispatcherRegistry,
@@ -164,7 +170,10 @@ where
     let rpc_listener = TcpListener::bind(rpc_addr).await?;
     info!(%rpc_addr, "RPC server listening");
 
-    let rpc_server = Server::new(rpc_listener, state)
+    let rustls_config = ersha_tls::server_config(&tls_config)?;
+    let rpc_acceptor = TlsAcceptor::from(Arc::new(rustls_config));
+
+    let rpc_server = Server::new(rpc_listener, state, rpc_acceptor)
         .on_hello(
             |hello: HelloRequest, _msg_id, _rpc, state: &AppState<D, Dev, R, S>| {
                 let dispatcher_registry = state.dispatcher_registry.clone();
@@ -285,6 +294,7 @@ where
         )
         .on_alert(
             |request: AlertRequest, _msg_id, _rpc, _state: &AppState<D, Dev, R, S>| async move {
+
                 info!(
                     alert_id = ?request.id,
                     dispatcher_id = ?request.dispatcher_id,
