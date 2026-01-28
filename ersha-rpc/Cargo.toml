@@ -13,6 +13,8 @@ tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
 ulid.workspace = true
+tokio-rustls.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
+ersha-tls = { path = "../ersha-tls" }

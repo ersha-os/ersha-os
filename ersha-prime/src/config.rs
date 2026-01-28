@@ -3,10 +3,13 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
+use ersha_tls::TlsConfig;
+
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub server: ServerConfig,
     pub registry: RegistryConfig,
+    pub tls: TlsConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,6 +44,7 @@ impl Default for Config {
                 http_addr: "0.0.0.0:8080".parse().unwrap(),
             },
             registry: RegistryConfig::Memory,
+            tls: TlsConfig::default(),
         }
     }
 }

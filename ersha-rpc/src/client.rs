@@ -5,7 +5,7 @@ use ersha_core::{
 };
 use std::time::Duration;
 use thiserror::Error;
-use tokio::net::TcpStream;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{RpcError, RpcTcp, WireError, WireMessage};
 
@@ -27,11 +27,17 @@ pub enum ClientError {
 }
 
 impl Client {
-    pub fn new(stream: TcpStream) -> Self {
+    pub fn new<S>(stream: S) -> Self
+    where
+        S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    {
         Self::with_buffer(stream, 1024)
     }
 
-    pub fn with_buffer(stream: TcpStream, buffer: usize) -> Self {
+    pub fn with_buffer<S>(stream: S, buffer: usize) -> Self
+    where
+        S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    {
         Self {
             rpc: RpcTcp::new(stream, buffer),
             timeout: DEFAULT_TIMEOUT,

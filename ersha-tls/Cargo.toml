@@ -1,0 +1,12 @@
+[package]
+name = "ersha-tls"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rustls-pemfile.workspace = true
+tokio-rustls.workspace = true
+serde.workspace = true
+tokio.workspace = true
+rustls.workspace = true
+thiserror.workspace = true

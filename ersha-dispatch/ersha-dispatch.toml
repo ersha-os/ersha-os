@@ -17,3 +17,9 @@ type = "mock"
 reading_interval_secs = 5
 status_interval_secs = 30
 device_count = 3
+
+[tls]
+cert = "./keys/client.crt"
+key = "./keys/client.key"
+root_ca = "./keys/root_ca.crt"
+domain = "localhost"

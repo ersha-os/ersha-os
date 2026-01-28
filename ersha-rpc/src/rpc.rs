@@ -2,8 +2,7 @@ use dashmap::DashMap;
 use std::{sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::{
-    io::{BufReader, BufWriter},
-    net::TcpStream,
+    io::{AsyncRead, AsyncWrite, BufReader, BufWriter},
     sync::{mpsc, oneshot},
 };
 
@@ -32,8 +31,11 @@ pub struct RpcTcp {
 }
 
 impl RpcTcp {
-    pub fn new(stream: TcpStream, buffer: usize) -> Self {
-        let (reader, writer) = stream.into_split();
+    pub fn new<S>(stream: S, buffer: usize) -> Self
+    where
+        S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    {
+        let (reader, writer) = tokio::io::split(stream);
         let mut reader = BufReader::new(reader);
         let mut writer = BufWriter::new(writer);
 

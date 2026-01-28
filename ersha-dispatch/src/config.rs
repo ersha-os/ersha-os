@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 
+use ersha_tls::TlsConfig;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -10,6 +11,7 @@ pub struct Config {
     pub storage: StorageConfig,
     pub prime: PrimeConfig,
     pub edge: EdgeConfig,
+    pub tls: TlsConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -85,6 +87,7 @@ impl Default for Config {
                 status_interval_secs: 30,
                 device_count: 3,
             },
+            tls: TlsConfig::default(),
         }
     }
 }

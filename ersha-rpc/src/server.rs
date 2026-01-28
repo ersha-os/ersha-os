@@ -2,6 +2,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
+use tokio_rustls::{TlsAcceptor, server::TlsStream};
 use tokio_util::sync::CancellationToken;
 
 use crate::{MessageId, RpcTcp, WireMessage};
@@ -17,6 +18,7 @@ pub type HandlerFn<Req, Res, S> = Box<
 
 pub struct Server<S> {
     listener: TcpListener,
+    acceptor: TlsAcceptor,
     buffer_size: usize,
     state: Arc<S>,
     handlers: ServerHandlers<S>,
@@ -33,9 +35,10 @@ struct ServerHandlers<S> {
 }
 
 impl<S: Send + Sync + 'static> Server<S> {
-    pub fn new(listener: TcpListener, state: S) -> Self {
+    pub fn new(listener: TcpListener, state: S, acceptor: TlsAcceptor) -> Self {
         Self {
             listener,
+            acceptor,
             buffer_size: 1024,
             state: Arc::new(state),
             handlers: ServerHandlers {
@@ -124,7 +127,7 @@ impl<S: Send + Sync + 'static> Server<S> {
     async fn handle_connection(
         handlers: Arc<ServerHandlers<S>>,
         state: Arc<S>,
-        stream: TcpStream,
+        stream: TlsStream<TcpStream>,
         buffer_size: usize,
     ) {
         let mut rpc = RpcTcp::new(stream, buffer_size);
@@ -273,11 +276,20 @@ impl<S: Send + Sync + 'static> Server<S> {
                     match result {
                         Ok((stream, addr)) => {
                             tracing::debug!("accepted connection from {:?}", addr);
+                            let acceptor = self.acceptor.clone();
+
                             let handlers = handlers.clone();
                             let state = state.clone();
                             let buffer_size = self.buffer_size;
                             tokio::spawn(async move {
-                                Self::handle_connection(handlers, state, stream, buffer_size).await;
+                                match acceptor.accept(stream).await {
+                                    Ok(tls_stream) => {
+                                        Self::handle_connection(handlers, state, tls_stream, buffer_size).await;
+                                    }
+                                    Err(err) => {
+                                        tracing::error!(%addr, "TLS handshake failed: {:?}", err);
+                                    }
+                                }
                             });
                         }
                         Err(e) => {

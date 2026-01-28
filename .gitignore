@@ -1,2 +1,8 @@
 .direnv
 target
+
+ersha-dispatch/keys/*
+ersha-prime/keys/*
+ersha-tls/*.crt
+ersha-tls/*.key
+ersha-rpc/examples/keys/*

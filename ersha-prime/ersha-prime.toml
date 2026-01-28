@@ -9,3 +9,9 @@ type = "memory"
 # [registry]
 # type = "sqlite"
 # path = "ersha-prime.db"
+
+[tls]
+cert = "./keys/server.crt"
+key = "./keys/server.key"
+root_ca = "./keys/root_ca.crt"
+domain = "localhost"
