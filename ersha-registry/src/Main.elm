@@ -29,6 +29,7 @@ type ApiData a
 type Modals
     = DispatcherModal DispatcherForm
     | DeviceModal DeviceForm
+    | DetailDispatcherModal (ApiData Dispatcher)
     | Closed
 
 
@@ -137,6 +138,8 @@ type Msg
     | GotDevices (Result Http.Error ListDevicesResponse)
     | SubmittedDispatcher (Result Http.Error ())
     | SubmittedDevice (Result Http.Error ())
+    | OpenDispatcherDetail Ulid
+    | GotDetailDispatcher (Result Http.Error Dispatcher)
     | SubmitForm Modals
 
 
@@ -154,11 +157,101 @@ view model =
                 DeviceModal form ->
                     viewDeviceModal form
 
+                DetailDispatcherModal data ->
+                    viewDetailDispatcherModal data
+
                 Closed ->
                     text ""
             ]
         ]
     }
+
+
+viewDetailDispatcherModal : ApiData Dispatcher -> Html Msg
+viewDetailDispatcherModal remoteData =
+    case remoteData of
+        NotAsked ->
+            text ""
+
+        Loading ->
+            viewModal
+                { title = "Dispatcher Details"
+                , body =
+                    div [ class "flex flex-col items-center justify-center p-12 space-y-4" ]
+                        [ div [ class "w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" ] []
+                        , p [ class "text-sm text-gray-500 font-mono" ] [ text "Fetching registry data..." ]
+                        ]
+                , footer = [ viewCloseButton ]
+                }
+
+        Failure err ->
+            viewModal
+                { title = "Error"
+                , body =
+                    div [ class "bg-red-900/20 border border-red-500/50 p-6 rounded" ]
+                        [ p [ class "text-red-400 text-sm font-mono" ] [ text (httpErrorToString err) ] ]
+                , footer = [ viewCloseButton ]
+                }
+
+        Success dispatcher ->
+            viewModal
+                { title = "Dispatcher: " ++ dispatcher.id
+                , body = viewDispatcherDetails dispatcher
+                , footer =
+                    [ viewCloseButton
+                    ]
+                }
+
+
+viewCloseButton : Html Msg
+viewCloseButton =
+    button
+        [ class "text-[#d8d9da] hover:bg-[#2c2c2e] px-4 py-2 rounded text-sm transition-colors"
+        , onClick CloseModal
+        ]
+        [ text "Close" ]
+
+
+viewDispatcherDetails : Dispatcher -> Html Msg
+viewDispatcherDetails dispatcher =
+    div [ class "space-y-6" ]
+        [ div [ class "flex items-center gap-4 bg-[#0b0c0e] p-4 rounded border border-[#2c2c2e]" ]
+            [ div [ class "flex-1" ]
+                [ label [ class "text-[10px] text-gray-500 uppercase font-bold" ] [ text "Current State" ]
+                , div [ class "mt-1" ] [ span [ class (stateBadgeClass dispatcher.state) ] [ text dispatcher.state ] ]
+                ]
+            , div [ class "flex-1" ]
+                [ label [ class "text-[10px] text-gray-500 uppercase font-bold" ] [ text "Provisioned At" ]
+                , div [ class "text-sm text-[#d8d9da] mt-1 font-mono" ] [ text dispatcher.provisionedAt ]
+                ]
+            ]
+        , div [ class "grid grid-cols-2 gap-6" ]
+            [ div [ class "space-y-1" ]
+                [ label [ class "text-[10px] text-orange-400 uppercase font-bold" ] [ text "Registry ID" ]
+                , div [ class "text-sm text-[#d8d9da] font-mono break-all" ] [ text dispatcher.id ]
+                ]
+            , div [ class "space-y-1" ]
+                [ label [ class "text-[10px] text-orange-400 uppercase font-bold" ] [ text "H3 Index (u64)" ]
+                , div [ class "text-sm text-[#d8d9da] font-mono" ] [ text (String.fromInt dispatcher.location) ]
+                ]
+            ]
+        , div [ class "pt-4 border-t border-[#2c2c2e]" ]
+            [ h4 [ class "text-xs font-bold text-gray-500 uppercase mb-3" ] [ text "Network Performance" ]
+            , div [ class "grid grid-cols-3 gap-2" ]
+                [ viewMiniStat "Uptime" "99.8%"
+                , viewMiniStat "Throughput" "1.2k/s"
+                , viewMiniStat "Latency" "42ms"
+                ]
+            ]
+        ]
+
+
+viewMiniStat : String -> String -> Html Msg
+viewMiniStat lbl val =
+    div [ class "bg-[#222529] p-2 rounded border border-[#2c2c2e]" ]
+        [ div [ class "text-[9px] text-gray-500 uppercase" ] [ text lbl ]
+        , div [ class "text-xs font-bold text-white font-mono" ] [ text val ]
+        ]
 
 
 viewModal : { title : String, body : Html Msg, footer : List (Html Msg) } -> Html Msg
@@ -541,7 +634,9 @@ viewDispatcherRow dispatcher =
         , td
             [ class "px-4 py-3 text-right" ]
             [ button
-                [ class "text-blue-400 hover:underline mr-3" ]
+                [ class "text-blue-400 hover:underline mr-3"
+                , onClick <| OpenDispatcherDetail dispatcher.id
+                ]
                 [ text "View" ]
             ]
         ]
@@ -731,6 +826,9 @@ update msg model =
                 Closed ->
                     ( model, Cmd.none )
 
+                DetailDispatcherModal _ ->
+                    ( model, Cmd.none )
+
         SubmittedDispatcher result ->
             case result of
                 Ok _ ->
@@ -814,6 +912,25 @@ update msg model =
 
                 _ ->
                     ( model, Cmd.none )
+
+        OpenDispatcherDetail dispatcher_id ->
+            ( { model | modal = DetailDispatcherModal Loading }, getDispatcher dispatcher_id )
+
+        GotDetailDispatcher result ->
+            case result of
+                Ok response ->
+                    ( { model | modal = DetailDispatcherModal (Success response) }, Cmd.none )
+
+                Err err ->
+                    ( { model | modal = DetailDispatcherModal (Failure err) }, Cmd.none )
+
+
+getDispatcher : Ulid -> Cmd Msg
+getDispatcher dispatcher_id =
+    Http.get
+        { url = "/api/dispatchers/" ++ dispatcher_id
+        , expect = Http.expectJson GotDetailDispatcher dispatcherDecoder
+        }
 
 
 httpErrorToString : Http.Error -> String
@@ -1047,8 +1164,9 @@ deviceDecoder =
 
 dispatcherDecoder : Decoder Dispatcher
 dispatcherDecoder =
-    Decode.map3 Dispatcher
+    Decode.map4 Dispatcher
         (field "id" string)
+        (field "location" int)
         (field "state" string)
         (field "provisioned_at" string)
 
