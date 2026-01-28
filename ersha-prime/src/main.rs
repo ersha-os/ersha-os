@@ -33,6 +33,7 @@ use ersha_tls::TlsConfig;
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use tokio_util::sync::CancellationToken;
+use tower_http::services::ServeDir;
 use tracing::{error, info, warn};
 
 #[derive(Parser)]
@@ -350,8 +351,12 @@ where
     // Create the API router with dispatcher and device routes
     let api_router = api::api_router(api_dispatcher_registry, api_device_registry);
 
+    let serve_dir = ServeDir::new("public").append_index_html_on_directories(true);
+
     // Merge with health endpoint
-    let axum_app = api_router.route("/health", get(health_handler));
+    let axum_app = api_router
+        .route("/health", get(health_handler))
+        .fallback_service(serve_dir);
 
     let axum_listener = TcpListener::bind(http_addr).await?;
     info!(%http_addr, "HTTP server listening");

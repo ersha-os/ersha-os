@@ -36,11 +36,11 @@ build-rpc:
 
 # Run ersha-prime server (default config: ersha-prime.toml)
 run-prime *ARGS:
-    cargo run -p ersha-prime -- {{ARGS}}
+    cd ersha-prime && cargo run -- {{ARGS}}
 
 # Run ersha-dispatch service (default config: ersha-dispatch.toml)
 run-dispatch *ARGS:
-    cargo run -p ersha-dispatch -- {{ARGS}}
+    cd ersha-dispatch && cargo run  -- {{ARGS}}
 
 # ============================================================
 # Example Recipes (from ersha-rpc)
@@ -134,7 +134,6 @@ doc-open:
 # TLS & Security Recipes
 # ============================================================
 
-root_keys        := "keys"
 tls_dir          := "ersha-tls"
 prime_keys       := "ersha-prime/keys"
 dispatch_keys    := "ersha-dispatch/keys"
@@ -167,9 +166,7 @@ tls-gen:
 # Distribute keys to prime, dispatch, and rpc examples
 tls-dist:
     @echo "Distributing keys to crates..."
-    mkdir -p {{prime_keys}} {{dispatch_keys}} {{rpc_example_keys}} {{root_keys}}
-    cp {{tls_dir}}/server.crt {{tls_dir}}/server.key {{tls_dir}}/root_ca.crt {{root_keys}}/
-    cp {{tls_dir}}/client.crt {{tls_dir}}/client.key {{tls_dir}}/root_ca.crt {{root_keys}}/
+    mkdir -p {{prime_keys}} {{dispatch_keys}} {{rpc_example_keys}}
     # Server gets server keys + root CA
     cp {{tls_dir}}/server.crt {{tls_dir}}/server.key {{tls_dir}}/root_ca.crt {{prime_keys}}/
     # Client gets client keys + root CA
@@ -185,20 +182,20 @@ tls-clean-tmp:
 # Wipe all generated keys from the entire workspace for a fresh start
 tls-wipe:
     @echo "Wiping all TLS assets from workspace..."
-    rm -rf {{prime_keys}} {{dispatch_keys}} {{rpc_example_keys}} {{root_keys}}
+    rm -rf {{prime_keys}} {{dispatch_keys}} {{rpc_example_keys}}
     cd {{tls_dir}} && rm -f *.crt *.key *.csr *.srl
 
 # ============================================================
 # Frontend Deployment (to Axum)
 # ============================================================
 
-ui_dir := "ersha-registry"
+ersha_registry_dir := "ersha-registry"
 prime_public := "ersha-prime/public"
 
 # Build UI and move assets to ersha-prime/public for Axum to serve
-ui-deploy:
+ersha-registry-deploy:
     @echo "Building ersha-registry..."
-    cd {{ui_dir}} && npm run build
+    cd {{ersha_registry_dir}} && npm run build
 
     @echo "Preparing ersha-prime public directory..."
     mkdir -p {{prime_public}}
@@ -207,6 +204,10 @@ ui-deploy:
     rm -rf {{prime_public}}/*
 
     @echo "Moving built files to {{prime_public}}..."
-    cp -r {{ui_dir}}/dist/* {{prime_public}}/
+    cp -r {{ersha_registry_dir}}/dist/* {{prime_public}}/
 
     @echo "Done! Axum can now serve the UI from {{prime_public}}"
+
+# Run ersha registry for dev
+ersha-registry-run:
+  cd {{ersha_registry_dir}} && npm run dev

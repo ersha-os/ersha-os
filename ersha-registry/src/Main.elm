@@ -1403,6 +1403,7 @@ deviceDecoder =
         (field "sensors" (list sensorDecoder))
 
 
+sensorDecoder : Decoder Sensor
 sensorDecoder =
     Decode.map2 Sensor
         (field "id" string)
