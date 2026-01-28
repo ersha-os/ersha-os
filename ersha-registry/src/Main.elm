@@ -5,15 +5,16 @@ import Html exposing (..)
 import Html.Attributes exposing (attribute, class, placeholder, selected, title, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Http
-import Json.Decode as Decode exposing (Decoder, field, int, maybe, string)
+import Json.Decode as Decode exposing (Decoder, field, int, list, maybe, string)
 import Json.Encode as Encode
 import SvgAssets
 import Types exposing (Device, Dispatcher)
+import Url.Builder as Builder
 
 
 type alias Model =
-    { devices : ApiData (List Device)
-    , dispatchers : ApiData (List Dispatcher)
+    { devices : ApiData ListDevicesResponse
+    , dispatchers : ApiData ListDispatchersResponse
     , modal : Modals
     }
 
@@ -72,6 +73,53 @@ type SensorKind
     | RainFall
 
 
+type StateFilter
+    = Active
+    | Suspended
+
+
+type SortOrder
+    = Asc
+    | Desc
+
+
+type alias DispatchersQuery =
+    { state : Maybe StateFilter
+    , location : Maybe Int
+    , sortOrder : Maybe SortOrder
+    , offset : Maybe Int
+    , limit : Maybe Int
+    , after : Maybe String
+    }
+
+
+type alias ListDispatchersResponse =
+    { dispatchers : List Dispatcher
+    , total : Int
+    }
+
+
+type DeviceSortBy
+    = SortState
+    | SortManufacturer
+    | SortSensorCount
+    | SortProvisionedAt
+
+
+type alias DevicesQuery =
+    { state : Maybe StateFilter
+    , location : Maybe Int
+    , manufacturer : Maybe String
+    , provisionedAfter : Maybe String
+    , provisionedBefore : Maybe String
+    , sortBy : Maybe DeviceSortBy
+    , sortOrder : Maybe SortOrder
+    , offset : Maybe Int
+    , limit : Maybe Int
+    , after : Maybe String
+    }
+
+
 type Msg
     = NoOp
       -- Navigation/UI
@@ -85,8 +133,8 @@ type Msg
     | UpdateSensor Int SensorForm
       -- Api Lifecycle
     | FetchAll
-    | GotDispatchers (Result Http.Error (List Dispatcher))
-    | GotDevices (Result Http.Error (List Device))
+    | GotDispatchers (Result Http.Error ListDispatchersResponse)
+    | GotDevices (Result Http.Error ListDevicesResponse)
     | SubmittedDispatcher (Result Http.Error ())
     | SubmittedDevice (Result Http.Error ())
     | SubmitForm Modals
@@ -309,8 +357,12 @@ mainContent model =
         ]
 
 
-viewDevices : List Device -> Html Msg
-viewDevices devices =
+viewDevices : ListDevicesResponse -> Html Msg
+viewDevices devices_resp =
+    let
+        devices =
+            devices_resp.devices
+    in
     div
         [ class "bg-[#181b1f] rounded border border-[#2c2c2e]" ]
         [ div
@@ -334,6 +386,7 @@ viewDevices devices =
                         , th [ class "px-4 py-2" ] [ text "State" ]
                         , th [ class "px-4 py-2" ] [ text "Location" ]
                         , th [ class "px-4 py-2 text-right" ] [ text "Provisioned" ]
+                        , th [ class "px-4 py-2 text-right" ] [ text "Actions" ]
                         ]
                     ]
                 , tbody
@@ -367,6 +420,12 @@ viewDeviceRow device =
         , td
             [ class "px-4 py-3 text-right text-gray-400 text-xs" ]
             [ text device.provisionedAt ]
+        , td
+            [ class "px-4 py-3 text-right" ]
+            [ button
+                [ class "text-blue-400 hover:underline mr-3" ]
+                [ text "View" ]
+            ]
         ]
 
 
@@ -423,8 +482,12 @@ viewPlaceholder msg =
         [ text msg ]
 
 
-viewDispatchers : List Dispatcher -> Html Msg
-viewDispatchers dispatchers =
+viewDispatchers : ListDispatchersResponse -> Html Msg
+viewDispatchers disp_resp =
+    let
+        dispatchers =
+            disp_resp.dispatchers
+    in
     div
         [ class "bg-[#181b1f] rounded border border-[#2c2c2e]" ]
         [ div
@@ -474,15 +537,12 @@ viewDispatcherRow dispatcher =
             ]
         , td
             [ class "px-4 py-3 text-gray-400" ]
-            [ text dispatcher.lastSeen ]
+            [ text dispatcher.provisionedAt ]
         , td
             [ class "px-4 py-3 text-right" ]
             [ button
                 [ class "text-blue-400 hover:underline mr-3" ]
                 [ text "View" ]
-            , button
-                [ class "text-red-400 hover:underline" ]
-                [ text "Suspend" ]
             ]
         ]
 
@@ -641,13 +701,13 @@ update msg model =
 
         FetchAll ->
             ( { model | devices = Loading, dispatchers = Loading }
-            , Cmd.batch [ getDispatchers, getDevices ]
+            , Cmd.batch [ getDispatchers defaultDispatchersQuery, getDevices defaultDevicesQuery ]
             )
 
         GotDispatchers result ->
             case result of
-                Ok data ->
-                    ( { model | dispatchers = Success data }, Cmd.none )
+                Ok response ->
+                    ( { model | dispatchers = Success response }, Cmd.none )
 
                 Err err ->
                     ( { model | dispatchers = Failure err }, Cmd.none )
@@ -674,7 +734,7 @@ update msg model =
         SubmittedDispatcher result ->
             case result of
                 Ok _ ->
-                    ( { model | modal = Closed }, getDispatchers )
+                    ( { model | modal = Closed }, getDispatchers defaultDispatchersQuery )
 
                 Err err ->
                     ( { model | dispatchers = Failure err }, Cmd.none )
@@ -682,7 +742,7 @@ update msg model =
         SubmittedDevice result ->
             case result of
                 Ok _ ->
-                    ( { model | modal = Closed }, getDevices )
+                    ( { model | modal = Closed }, getDevices defaultDevicesQuery )
 
                 Err err ->
                     ( { model | devices = Failure err }, Cmd.none )
@@ -778,20 +838,119 @@ httpErrorToString error =
             "Data conversion error: " ++ message
 
 
-getDispatchers : Cmd Msg
-getDispatchers =
+getDispatchers : DispatchersQuery -> Cmd Msg
+getDispatchers query =
+    let
+        params =
+            [ query.state
+                |> Maybe.map (\s -> Builder.string "state" (stateFilterToString s))
+            , query.location
+                |> Maybe.map (\l -> Builder.int "location" l)
+            , query.sortOrder
+                |> Maybe.map (\o -> Builder.string "sort_order" (sortOrderToString o))
+            , query.offset
+                |> Maybe.map (\n -> Builder.int "offset" n)
+            , query.limit
+                |> Maybe.map (\n -> Builder.int "limit" n)
+            , query.after
+                |> Maybe.map (\a -> Builder.string "after" a)
+            ]
+                |> List.filterMap identity
+
+        -- Remove the Nothings
+        apiUrl =
+            Builder.relative [ "api", "dispatchers" ] params
+    in
     Http.get
-        { url = "/api/dispatchers"
-        , expect = Http.expectJson GotDispatchers (Decode.list dispatcherDecoder)
+        { url = apiUrl
+        , expect = Http.expectJson GotDispatchers dispatchersResponseDecoder
         }
 
 
-getDevices : Cmd Msg
-getDevices =
+
+-- Helpers
+
+
+stateFilterToString : StateFilter -> String
+stateFilterToString s =
+    case s of
+        Active ->
+            "active"
+
+        Suspended ->
+            "suspended"
+
+
+sortOrderToString : SortOrder -> String
+sortOrderToString o =
+    case o of
+        Asc ->
+            "asc"
+
+        Desc ->
+            "desc"
+
+
+dispatchersResponseDecoder : Decoder ListDispatchersResponse
+dispatchersResponseDecoder =
+    Decode.map2 ListDispatchersResponse
+        (field "dispatchers" (list dispatcherDecoder))
+        (field "total" int)
+
+
+getDevices : DevicesQuery -> Cmd Msg
+getDevices query =
+    let
+        params =
+            [ query.state |> Maybe.map (\s -> Builder.string "state" (stateFilterToString s))
+            , query.location |> Maybe.map (\l -> Builder.int "location" l)
+            , query.manufacturer |> Maybe.map (\m -> Builder.string "manufacturer" m)
+            , query.provisionedAfter |> Maybe.map (\ts -> Builder.string "provisioned_after" ts)
+            , query.provisionedBefore |> Maybe.map (\ts -> Builder.string "provisioned_before" ts)
+            , query.sortBy |> Maybe.map (\b -> Builder.string "sort_by" (deviceSortToString b))
+            , query.sortOrder |> Maybe.map (\o -> Builder.string "sort_order" (sortOrderToString o))
+            , query.offset |> Maybe.map (\n -> Builder.int "offset" n)
+            , query.limit |> Maybe.map (\n -> Builder.int "limit" n)
+            , query.after |> Maybe.map (\a -> Builder.string "after" a)
+            ]
+                |> List.filterMap identity
+
+        apiUrl =
+            Builder.relative [ "api", "devices" ] params
+    in
     Http.get
-        { url = "/api/devices"
-        , expect = Http.expectJson GotDevices (Decode.list deviceDecoder)
+        { url = apiUrl
+        , expect = Http.expectJson GotDevices devicesResponseDecoder
         }
+
+
+deviceSortToString : DeviceSortBy -> String
+deviceSortToString b =
+    case b of
+        SortState ->
+            "state"
+
+        SortManufacturer ->
+            "manufacturer"
+
+        SortSensorCount ->
+            "sensorCount"
+
+        SortProvisionedAt ->
+            "provisionedAt"
+
+
+type alias ListDevicesResponse =
+    { devices : List Device
+    , total : Int
+    }
+
+
+devicesResponseDecoder : Decoder ListDevicesResponse
+devicesResponseDecoder =
+    Decode.map2 ListDevicesResponse
+        (field "devices" (list deviceDecoder))
+        (field "total" int)
 
 
 postDispatcher : DispatcherForm -> Cmd Msg
@@ -883,7 +1042,7 @@ deviceDecoder =
         (field "state" string)
         (field "location" int)
         (maybe (field "manufacturer" string))
-        (field "provisionedAt" string)
+        (field "provisioned_at" string)
 
 
 dispatcherDecoder : Decoder Dispatcher
@@ -891,7 +1050,7 @@ dispatcherDecoder =
     Decode.map3 Dispatcher
         (field "id" string)
         (field "state" string)
-        (field "lastSeen" string)
+        (field "provisioned_at" string)
 
 
 subscriptions : Model -> Sub Msg
@@ -899,13 +1058,13 @@ subscriptions _ =
     Sub.none
 
 
-init : () -> ( Model, Cmd msg )
+init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { devices = Success sampleDevices
-      , dispatchers = Success sampleDispatchers
+    ( { devices = Loading
+      , dispatchers = Loading
       , modal = Closed
       }
-    , Cmd.none
+    , Cmd.batch [ getDispatchers defaultDispatchersQuery, getDevices defaultDevicesQuery ]
     )
 
 
@@ -919,44 +1078,27 @@ main =
         }
 
 
-sampleDevices : List Device
-sampleDevices =
-    [ { id = "dev-x9"
-      , kind = "gateway"
-      , state = "online"
-      , location = 617733123456789
-      , manufacturer = Just "Helios Systems"
-      , provisionedAt = "2025-01-12T09:42:18Z"
-      }
-    , { id = "dev-a1"
-      , kind = "sensor-node"
-      , state = "idle"
-      , location = 617733123456790
-      , manufacturer = Just "Axiom Devices"
-      , provisionedAt = "2025-01-08T16:11:03Z"
-      }
-    , { id = "dev-k5"
-      , kind = "edge-controller"
-      , state = "offline"
-      , location = 617733123456791
-      , manufacturer = Nothing
-      , provisionedAt = "2024-12-28T22:55:47Z"
-      }
-    ]
+defaultDevicesQuery : DevicesQuery
+defaultDevicesQuery =
+    { state = Nothing
+    , manufacturer = Nothing
+    , provisionedAfter = Nothing
+    , provisionedBefore = Nothing
+    , sortBy = Nothing
+    , sortOrder = Just Desc
+    , limit = Just 50
+    , after = Nothing
+    , location = Nothing
+    , offset = Just 0
+    }
 
 
-sampleDispatchers : List Dispatcher
-sampleDispatchers =
-    [ { id = "disp-8821"
-      , state = "running"
-      , lastSeen = "2s ago"
-      }
-    , { id = "disp-1044"
-      , state = "idle"
-      , lastSeen = "14m ago"
-      }
-    , { id = "disp-3390"
-      , state = "offline"
-      , lastSeen = "3h ago"
-      }
-    ]
+defaultDispatchersQuery : DispatchersQuery
+defaultDispatchersQuery =
+    { state = Nothing
+    , location = Nothing
+    , sortOrder = Just Desc
+    , offset = Just 0
+    , limit = Just 50
+    , after = Nothing
+    }

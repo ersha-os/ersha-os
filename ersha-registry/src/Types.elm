@@ -14,5 +14,5 @@ type alias Device =
 type alias Dispatcher =
     { id : String
     , state : String
-    , lastSeen : String
+    , provisionedAt : String
     }
