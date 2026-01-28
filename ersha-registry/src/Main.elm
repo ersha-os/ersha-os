@@ -2,7 +2,7 @@ module Main exposing (main, sensorDecoder, subscriptions)
 
 import Browser exposing (Document)
 import Html exposing (..)
-import Html.Attributes exposing (attribute, class, placeholder, selected, title, type_, value)
+import Html.Attributes exposing (class, disabled, placeholder, selected, title, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as Decode exposing (Decoder, fail, field, int, list, maybe, string, succeed)
@@ -15,6 +15,8 @@ type alias Model =
     { devices : ApiData ListDevicesResponse
     , dispatchers : ApiData ListDispatchersResponse
     , modal : Modals
+    , devicePager : Pager
+    , dispatcherPager : Pager
     }
 
 
@@ -146,6 +148,13 @@ type alias DevicesQuery =
     }
 
 
+type alias Pager =
+    { currentPage : Int
+    , itemsPerPage : Int
+    , totalItems : Int
+    }
+
+
 type Msg
     = NoOp
       -- Navigation/UI
@@ -168,6 +177,9 @@ type Msg
     | OpenDeviceDetail Ulid
     | GotDetailDevice (Result Http.Error Device)
     | SubmitForm Modals
+      -- Pagination
+    | SetDispatcherPage Int
+    | SetDevicePage Int
 
 
 view : Model -> Document Msg
@@ -572,14 +584,14 @@ viewDispatcherModal form =
 mainContent : Model -> Html Msg
 mainContent model =
     main_ [ class "p-6 space-y-6" ]
-        [ viewSummary
-        , viewRemoteContent "Dispatchers" model.dispatchers viewDispatchers
-        , viewRemoteContent "Devices" model.devices viewDevices
+        [ viewSummary model
+        , viewRemoteContent "Dispatchers" model.dispatchers <| viewDispatchers model.dispatcherPager
+        , viewRemoteContent "Devices" model.devices <| viewDevices model.devicePager
         ]
 
 
-viewDevices : ListDevicesResponse -> Html Msg
-viewDevices devices_resp =
+viewDevices : Pager -> ListDevicesResponse -> Html Msg
+viewDevices pager devices_resp =
     let
         devices =
             devices_resp.devices
@@ -615,7 +627,7 @@ viewDevices devices_resp =
                     (List.map viewDeviceRow devices)
                 ]
             ]
-        , viewPagination
+        , viewPagination pager SetDevicePage
         ]
 
 
@@ -705,8 +717,8 @@ viewPlaceholder msg =
         [ text msg ]
 
 
-viewDispatchers : ListDispatchersResponse -> Html Msg
-viewDispatchers disp_resp =
+viewDispatchers : Pager -> ListDispatchersResponse -> Html Msg
+viewDispatchers pager disp_resp =
     let
         dispatchers =
             disp_resp.dispatchers
@@ -740,7 +752,7 @@ viewDispatchers disp_resp =
                     (List.map viewDispatcherRow dispatchers)
                 ]
             ]
-        , viewPagination
+        , viewPagination pager SetDispatcherPage
         ]
 
 
@@ -792,38 +804,74 @@ dispatcherStateClass state =
             base ++ "bg-gray-800 text-gray-400 border-gray-700"
 
 
-viewPagination : Html Msg
-viewPagination =
-    div
-        [ class "px-4 py-3 border-t border-[#2c2c2e] flex items-center justify-between text-sm" ]
-        [ span
-            [ class "text-gray-500" ]
-            [ text "Showing 1–2 of 42" ]
-        , div
-            [ class "flex items-center gap-1" ]
-            [ button
-                [ class "px-2 py-1 rounded bg-[#222529] text-gray-400 hover:text-white hover:bg-[#2c2c2e] transition"
-                , attribute "disabled" "true"
-                ]
-                [ text "Prev" ]
-            , button
-                [ class "px-2 py-1 rounded bg-orange-600 text-white font-medium" ]
-                [ text "1" ]
-            , button
-                [ class "px-2 py-1 rounded bg-[#222529] text-gray-400 hover:text-white hover:bg-[#2c2c2e] transition" ]
-                [ text "2" ]
-            , button
-                [ class "px-2 py-1 rounded bg-[#222529] text-gray-400 hover:text-white hover:bg-[#2c2c2e] transition" ]
-                [ text "3" ]
-            , button
-                [ class "px-2 py-1 rounded bg-[#222529] text-gray-400 hover:text-white hover:bg-[#2c2c2e] transition" ]
-                [ text "Next" ]
+viewPagination : Pager -> (Int -> Msg) -> Html Msg
+viewPagination pager toMsg =
+    let
+        totalPages =
+            ceiling (toFloat pager.totalItems / toFloat pager.itemsPerPage)
+
+        startItem =
+            ((pager.currentPage - 1) * pager.itemsPerPage) + 1
+
+        endItem =
+            Basics.min (pager.currentPage * pager.itemsPerPage) pager.totalItems
+
+        pages =
+            List.range 1 totalPages
+    in
+    if pager.totalItems == 0 then
+        text ""
+
+    else
+        div [ class "px-4 py-3 border-t border-[#2c2c2e] flex items-center justify-between text-sm" ]
+            [ span [ class "text-gray-500" ]
+                [ text ("Showing " ++ String.fromInt startItem ++ "–" ++ String.fromInt endItem ++ " of " ++ String.fromInt pager.totalItems) ]
+            , div [ class "flex items-center gap-1" ]
+                (viewPrevBtn pager toMsg :: List.map (viewPageBtn pager toMsg) pages ++ [ viewNextBtn pager totalPages toMsg ])
             ]
+
+
+viewPageBtn : Pager -> (Int -> Msg) -> Int -> Html Msg
+viewPageBtn pager toMsg pageNum =
+    let
+        isActive =
+            pager.currentPage == pageNum
+    in
+    button
+        [ class <|
+            if isActive then
+                "px-2 py-1 rounded bg-orange-600 text-white font-medium"
+
+            else
+                "px-2 py-1 rounded bg-[#222529] text-gray-400 hover:text-white hover:bg-[#2c2c2e] transition"
+        , onClick (toMsg pageNum)
+        , disabled isActive
         ]
+        [ text (String.fromInt pageNum) ]
 
 
-viewSummary : Html msg
-viewSummary =
+viewPrevBtn : Pager -> (Int -> Msg) -> Html Msg
+viewPrevBtn pager toMsg =
+    button
+        [ class "px-2 py-1 rounded bg-[#222529] text-gray-400 disabled:opacity-30 hover:text-white transition"
+        , disabled (pager.currentPage <= 1)
+        , onClick (toMsg (pager.currentPage - 1))
+        ]
+        [ text "Prev" ]
+
+
+viewNextBtn : Pager -> Int -> (Int -> Msg) -> Html Msg
+viewNextBtn pager totalPages toMsg =
+    button
+        [ class "px-2 py-1 rounded bg-[#222529] text-gray-400 disabled:opacity-30 hover:text-white transition"
+        , disabled (pager.currentPage >= totalPages)
+        , onClick (toMsg (pager.currentPage + 1))
+        ]
+        [ text "Next" ]
+
+
+viewSummary : Model -> Html msg
+viewSummary model =
     div
         [ class "grid grid-cols-1 md:grid-cols-3 gap-4" ]
         [ div
@@ -833,7 +881,7 @@ viewSummary =
                 [ text "Total Devices" ]
             , p
                 [ class "text-3xl font-mono text-white" ]
-                [ text "1,284" ]
+                [ text <| String.fromInt model.devicePager.totalItems ]
             ]
         , div
             [ class "bg-[#181b1f] border-l-4 border-purple-500 p-4 rounded shadow-sm" ]
@@ -842,7 +890,7 @@ viewSummary =
                 [ text "Active Dispatchers" ]
             , p
                 [ class "text-3xl font-mono text-white" ]
-                [ text "42" ]
+                [ text <| String.fromInt model.dispatcherPager.totalItems ]
             ]
         , div
             [ class "bg-[#181b1f] border-l-4 border-green-500 p-4 rounded shadow-sm" ]
@@ -932,15 +980,29 @@ update msg model =
         GotDispatchers result ->
             case result of
                 Ok response ->
-                    ( { model | dispatchers = Success response }, Cmd.none )
+                    let
+                        oldPager =
+                            model.dispatcherPager
+
+                        updatedPager =
+                            { oldPager | totalItems = response.total }
+                    in
+                    ( { model | dispatchers = Success response, dispatcherPager = updatedPager }, Cmd.none )
 
                 Err err ->
                     ( { model | dispatchers = Failure err }, Cmd.none )
 
         GotDevices result ->
             case result of
-                Ok data ->
-                    ( { model | devices = Success data }, Cmd.none )
+                Ok response ->
+                    let
+                        oldPager =
+                            model.devicePager
+
+                        updatedPager =
+                            { oldPager | totalItems = response.total }
+                    in
+                    ( { model | devices = Success response, devicePager = updatedPager }, Cmd.none )
 
                 Err err ->
                     ( { model | devices = Failure err }, Cmd.none )
@@ -1067,6 +1129,32 @@ update msg model =
 
                 Err err ->
                     ( { model | modal = DetailDeviceModal (Failure err) }, Cmd.none )
+
+        SetDevicePage pageNum ->
+            let
+                oldPager =
+                    model.devicePager
+
+                newPager =
+                    { oldPager | currentPage = pageNum }
+
+                query =
+                    { defaultDevicesQuery | offset = Just (toOffset newPager), limit = Just newPager.itemsPerPage }
+            in
+            ( { model | devicePager = newPager }, getDevices query )
+
+        SetDispatcherPage pageNum ->
+            let
+                oldPager =
+                    model.devicePager
+
+                newPager =
+                    { oldPager | currentPage = pageNum }
+
+                query =
+                    { defaultDispatchersQuery | offset = Just (toOffset newPager), limit = Just newPager.itemsPerPage }
+            in
+            ( { model | dispatcherPager = newPager }, getDispatchers query )
 
 
 getDevice : Ulid -> Cmd Msg
@@ -1367,6 +1455,8 @@ init _ =
     ( { devices = Loading
       , dispatchers = Loading
       , modal = Closed
+      , devicePager = initPager 50
+      , dispatcherPager = initPager 50
       }
     , Cmd.batch [ getDispatchers defaultDispatchersQuery, getDevices defaultDevicesQuery ]
     )
@@ -1406,3 +1496,16 @@ defaultDispatchersQuery =
     , limit = Just 50
     , after = Nothing
     }
+
+
+initPager : Int -> Pager
+initPager limit =
+    { currentPage = 1
+    , itemsPerPage = limit
+    , totalItems = 0
+    }
+
+
+toOffset : Pager -> Int
+toOffset pager =
+    (pager.currentPage - 1) * pager.itemsPerPage
