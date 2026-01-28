@@ -43,6 +43,9 @@
             pkgs.cargo-dist
             pkgs.rust-analyzer
             pkgs.rust-bin.stable.latest.default
+
+            pkgs.jsonnet
+            pkgs.jsonnet-bundler
           ];
         };
       });

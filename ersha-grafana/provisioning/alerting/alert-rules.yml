@@ -1,0 +1,411 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Device Health Alerts
+    folder: Ersha OS
+    interval: 1m
+    rules:
+      # Low Battery Alert
+      - uid: low-battery-alert
+        title: Low Battery Warning
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ersha-clickhouse
+            model:
+              rawSql: |
+                SELECT
+                  device_id,
+                  argMax(battery_percent, timestamp) as battery
+                FROM device_statuses
+                WHERE timestamp >= now() - INTERVAL 5 MINUTE
+                GROUP BY device_id
+                HAVING battery < 20
+              format: table
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: count
+              settings:
+                mode: ""
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: Devices with low battery detected
+          description: One or more devices have battery level below 20%
+        labels:
+          severity: warning
+
+      # Critical Battery Alert
+      - uid: critical-battery-alert
+        title: Critical Battery Level
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ersha-clickhouse
+            model:
+              rawSql: |
+                SELECT
+                  device_id,
+                  argMax(battery_percent, timestamp) as battery
+                FROM device_statuses
+                WHERE timestamp >= now() - INTERVAL 5 MINUTE
+                GROUP BY device_id
+                HAVING battery < 10
+              format: table
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: count
+              settings:
+                mode: ""
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: Critical battery level detected
+          description: One or more devices have battery level below 10% - immediate attention required
+        labels:
+          severity: critical
+
+      # Weak Signal Alert
+      - uid: weak-signal-alert
+        title: Weak Signal Strength
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ersha-clickhouse
+            model:
+              rawSql: |
+                SELECT
+                  device_id,
+                  argMax(signal_rssi, timestamp) as rssi
+                FROM device_statuses
+                WHERE timestamp >= now() - INTERVAL 5 MINUTE
+                GROUP BY device_id
+                HAVING rssi < -80
+              format: table
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: count
+              settings:
+                mode: ""
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 10m
+        annotations:
+          summary: Devices with weak signal detected
+          description: One or more devices have signal strength below -80 dBm
+        labels:
+          severity: warning
+
+      # Device Errors Alert
+      - uid: device-errors-alert
+        title: Device Errors Detected
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ersha-clickhouse
+            model:
+              rawSql: |
+                SELECT count() as error_count
+                FROM device_status_errors
+                WHERE 1=1
+              format: table
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              settings:
+                mode: ""
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 10
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: High number of device errors
+          description: More than 10 device errors detected in the system
+        labels:
+          severity: warning
+
+  - orgId: 1
+    name: Sensor Alerts
+    folder: Ersha OS
+    interval: 1m
+    rules:
+      # High Temperature Alert
+      - uid: high-temp-alert
+        title: High Air Temperature
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ersha-clickhouse
+            model:
+              rawSql: |
+                SELECT
+                  device_id,
+                  max(metric_value) as temp
+                FROM sensor_readings
+                WHERE metric_type = 2
+                  AND timestamp >= now() - INTERVAL 5 MINUTE
+                GROUP BY device_id
+                HAVING temp > 40
+              format: table
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: count
+              settings:
+                mode: ""
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: High air temperature detected
+          description: Air temperature exceeds 40°C at one or more locations
+        labels:
+          severity: warning
+
+      # Low Soil Moisture Alert
+      - uid: low-soil-moisture-alert
+        title: Low Soil Moisture
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: ersha-clickhouse
+            model:
+              rawSql: |
+                SELECT
+                  device_id,
+                  argMax(metric_value, timestamp) as moisture
+                FROM sensor_readings
+                WHERE metric_type = 0
+                  AND timestamp >= now() - INTERVAL 15 MINUTE
+                GROUP BY device_id
+                HAVING moisture < 20
+              format: table
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: count
+              settings:
+                mode: ""
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 15m
+        annotations:
+          summary: Low soil moisture detected
+          description: Soil moisture below 20% - irrigation may be needed
+        labels:
+          severity: warning
+
+      # No Data Alert - Device Offline
+      - uid: device-offline-alert
+        title: Device Offline
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: ersha-clickhouse
+            model:
+              rawSql: |
+                SELECT
+                  d.id as device_id,
+                  max(ds.timestamp) as last_seen
+                FROM devices d FINAL
+                LEFT JOIN device_statuses ds ON d.id = ds.device_id
+                WHERE d.state = 'Active'
+                GROUP BY d.id
+                HAVING last_seen < now() - INTERVAL 15 MINUTE
+                   OR last_seen IS NULL
+              format: table
+          - refId: B
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: count
+              settings:
+                mode: ""
+          - refId: C
+            relativeTimeRange:
+              from: 900
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params:
+                      - 0
+                  operator:
+                    type: and
+                  reducer:
+                    type: last
+        noDataState: OK
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: Device offline
+          description: One or more active devices haven't reported in the last 15 minutes
+        labels:
+          severity: critical

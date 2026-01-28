@@ -1,0 +1,13 @@
+apiVersion: 1
+
+datasources:
+  - name: ClickHouse
+    uid: ersha-clickhouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    isDefault: true
+    jsonData:
+      host: host.docker.internal
+      port: 8123
+      protocol: http
+      defaultDatabase: ersha_test

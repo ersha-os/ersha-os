@@ -1,0 +1,3 @@
+dashboards/*.json
+jsonnet/vendor/
+jsonnet/jsonnetfile.lock.json

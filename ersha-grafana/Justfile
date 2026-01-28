@@ -1,0 +1,82 @@
+# Default recipe - list all available commands
+default:
+    @just --list
+
+# ============================================================
+# Dependency Management
+# ============================================================
+
+# Install jsonnet dependencies (grafonnet library)
+install-deps:
+    cd jsonnet && jb install
+
+# ============================================================
+# Build Recipes
+# ============================================================
+
+# Compile all jsonnet dashboards to JSON
+compile:
+    @mkdir -p dashboards
+    jsonnet -J jsonnet/vendor -o dashboards/overview.json jsonnet/dashboards/overview.jsonnet
+    jsonnet -J jsonnet/vendor -o dashboards/device-health.json jsonnet/dashboards/device-health.jsonnet
+    jsonnet -J jsonnet/vendor -o dashboards/sensor-readings.json jsonnet/dashboards/sensor-readings.jsonnet
+    @echo "Compiled 3 dashboards to dashboards/"
+
+# Install deps and compile dashboards
+build: install-deps compile
+
+# ============================================================
+# Docker Compose Operations
+# ============================================================
+
+# Start Grafana container
+up:
+    docker compose up -d
+
+# Stop Grafana container
+down:
+    docker compose down
+
+# Restart Grafana container
+restart:
+    docker compose restart
+
+# View Grafana logs
+logs:
+    docker compose logs -f
+
+# ============================================================
+# Development Recipes
+# ============================================================
+
+# Compile dashboards and restart Grafana
+rebuild: compile restart
+
+# Watch for changes and rebuild (requires watchexec)
+watch:
+    watchexec -e jsonnet -w jsonnet -- just compile
+
+# Validate jsonnet syntax
+validate:
+    @echo "Validating jsonnet files..."
+    jsonnet -J jsonnet/vendor --lint jsonnet/dashboards/overview.jsonnet
+    jsonnet -J jsonnet/vendor --lint jsonnet/dashboards/device-health.jsonnet
+    jsonnet -J jsonnet/vendor --lint jsonnet/dashboards/sensor-readings.jsonnet
+    @echo "All files valid!"
+
+# Format jsonnet files
+fmt:
+    jsonnetfmt -i jsonnet/lib/*.libsonnet
+    jsonnetfmt -i jsonnet/dashboards/*.jsonnet
+
+# ============================================================
+# Utility Recipes
+# ============================================================
+
+# Clean compiled dashboards
+clean:
+    rm -rf dashboards/*.json
+
+# Full clean including vendor
+clean-all: clean
+    rm -rf jsonnet/vendor jsonnet/jsonnetfile.lock.json
