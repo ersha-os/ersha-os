@@ -82,6 +82,7 @@ features = ["json", "rustls-tls"]
 
 [workspace.dependencies.rustls]
 version = "0.23.36"
+features = ["ring"]
 
 [workspace.dependencies.rustls-pemfile]
 version = "2.2.0"

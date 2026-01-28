@@ -26,3 +26,4 @@ ulid.workspace = true
 reqwest.workspace = true
 clickhouse.workspace = true
 tokio-rustls.workspace = true
+rustls.workspace = true

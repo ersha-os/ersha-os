@@ -55,6 +55,10 @@ async fn main() -> color_eyre::Result<()> {
         Config::default()
     };
 
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install crypto provider");
+
     let dispatcher_id: DispatcherId = DispatcherId(config.dispatcher.id.parse().map_err(|e| {
         color_eyre::eyre::eyre!("invalid dispatcher ID '{}': {}", config.dispatcher.id, e)
     })?);

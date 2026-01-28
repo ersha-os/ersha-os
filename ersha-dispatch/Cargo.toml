@@ -28,5 +28,6 @@ tracing-subscriber.workspace = true
 ulid.workspace = true
 postcard.workspace = true
 tokio-rustls.workspace = true
+rustls.workspace = true
 
 [dev-dependencies]

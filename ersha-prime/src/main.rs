@@ -78,6 +78,10 @@ async fn main() -> color_eyre::Result<()> {
         Config::default()
     };
 
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("Failed to install crypto provider");
+
     info!(rpc_addr = %config.server.rpc_addr, http_addr = %config.server.http_addr, "Starting servers");
 
     match config.registry {
