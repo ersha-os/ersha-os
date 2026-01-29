@@ -48,6 +48,8 @@
             pkgs.jsonnet-bundler
 
             pkgs.openssl
+	    pkgs.nodejs_24
+	    pkgs.elmPackages.elm
           ];
         };
       });
