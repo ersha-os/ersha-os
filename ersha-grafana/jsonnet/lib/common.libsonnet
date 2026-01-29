@@ -73,7 +73,9 @@ local g = import 'github.com/grafana/grafonnet/gen/grafonnet-latest/main.libsonn
     ])
     + g.panel.stat.standardOptions.withUnit(unit)
     + g.panel.stat.options.withGraphMode('none')
-    + g.panel.stat.options.withColorMode('value'),
+    + g.panel.stat.options.withColorMode('value')
+    + g.panel.stat.standardOptions.color.withMode('fixed')
+    + g.panel.stat.standardOptions.color.withFixedColor('blue'),
 
   timeseriesPanel(title, query, unit='none', legendMode='list')::
     g.panel.timeSeries.new(title)
