@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ersha-edge = { path = "../../ersha-edge" }
+ersha-edge = { path = "../.." }
 
 embassy-executor = { version = "0.9.0", features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
 embassy-rp = { version = "0.9.0", features = ["rp235xa", "critical-section-impl", "time-driver", "binary-info", "defmt"] }

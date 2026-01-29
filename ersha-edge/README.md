@@ -91,7 +91,7 @@ sensor_task!(air_temperature, MockTempSensor);
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     // (WiFi + network stack setup omitted here for brevity)
-    // See full example in `examples/rp235x_wifi.rs`
+    // See full example in `examples/rp235x/src/main.rs`
 
     let wifi = Wifi::new(stack, rx_buffer, tx_buffer);
     let engine = Engine::new(wifi).await.unwrap();
