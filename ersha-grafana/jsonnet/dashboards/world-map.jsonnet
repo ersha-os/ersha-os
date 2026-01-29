@@ -149,7 +149,6 @@ local deviceHeatmap =
         h3ToGeo(toUInt64(sr.location)).2 as longitude,
         count() as reading_count
       FROM sensor_readings sr
-      WHERE sr.timestamp >= $__fromTime AND sr.timestamp <= $__toTime
       GROUP BY sr.location
     |||, 'A', 2),
   ])
@@ -165,25 +164,38 @@ local deviceHeatmap =
   })
   + g.panel.geomap.options.withLayers([
     {
-      type: 'heatmap',
+      type: 'markers',
       name: 'Reading Density',
       config: {
-        weight: {
-          field: 'reading_count',
-          fixed: 1,
-          min: 0,
-          max: 1,
+        showLegend: true,
+        style: {
+          size: {
+            fixed: 8,
+            min: 4,
+            max: 20,
+            field: 'reading_count',
+          },
+          color: {
+            fixed: 'orange',
+          },
+          symbol: {
+            mode: 'fixed',
+            fixed: 'img/icons/marker/circle.svg',
+          },
+          opacity: 0.7,
         },
-        radius: 20,
-        blur: 15,
       },
       location: {
         mode: 'coords',
         latitude: 'latitude',
         longitude: 'longitude',
       },
+      tooltip: true,
     },
   ])
+  + g.panel.geomap.options.withTooltip({
+    mode: 'details',
+  })
   + g.panel.geomap.gridPos.withW(12)
   + g.panel.geomap.gridPos.withH(12);
 
