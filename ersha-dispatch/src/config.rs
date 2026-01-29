@@ -37,8 +37,8 @@ pub enum StorageConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct PrimeConfig {
-    /// Address of the ersha-prime RPC server
-    pub rpc_addr: SocketAddr,
+    /// Address of the ersha-prime RPC server (supports hostnames for Docker)
+    pub rpc_addr: String,
     /// Interval in seconds between upload attempts
     pub upload_interval_secs: u64,
 }
@@ -79,7 +79,7 @@ impl Default for Config {
             },
             storage: StorageConfig::Memory,
             prime: PrimeConfig {
-                rpc_addr: "127.0.0.1:9000".parse().unwrap(),
+                rpc_addr: "127.0.0.1:9000".to_string(),
                 upload_interval_secs: 60,
             },
             edge: EdgeConfig::Mock {

@@ -343,7 +343,7 @@ async fn run_data_collector<S>(
 #[allow(clippy::too_many_arguments)]
 async fn run_uploader<S>(
     storage: S,
-    prime_addr: std::net::SocketAddr,
+    prime_addr: String,
     dispatcher_id: DispatcherId,
     location: H3Cell,
     upload_interval: Duration,
@@ -375,7 +375,7 @@ async fn run_uploader<S>(
             _ = interval.tick() => {
                 // Ensure we have a connected and registered client
                 if client.is_none() {
-                    match connect_and_register(prime_addr, dispatcher_id, location, &tls_config).await {
+                    match connect_and_register(&prime_addr, dispatcher_id, location, &tls_config).await {
                         Ok(c) => {
                             client = Some(c);
                             backoff = Duration::from_secs(1);
@@ -508,7 +508,7 @@ async fn run_uploader<S>(
 }
 
 async fn connect_and_register(
-    prime_addr: std::net::SocketAddr,
+    prime_addr: &str,
     dispatcher_id: DispatcherId,
     location: H3Cell,
     tls_config: &TlsConfig,

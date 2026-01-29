@@ -153,7 +153,7 @@ tls-gen:
     cd {{tls_dir}} && openssl req -new -key server_raw.key -out server.csr -subj "/CN=localhost"
     cd {{tls_dir}} && openssl x509 -req -in server.csr -CA root_ca.crt -CAkey root_ca.key -CAcreateserial \
       -out server.crt -days 500 -sha256 \
-      -extfile <(printf "subjectAltName=DNS:localhost,IP:127.0.0.1")
+      -extfile <(printf "subjectAltName=DNS:localhost,DNS:ersha-prime,IP:127.0.0.1")
     # Client Cert
     cd {{tls_dir}} && openssl genrsa -out client_raw.key 2048
     cd {{tls_dir}} && openssl req -new -key client_raw.key -out client.csr -subj "/CN=my-client"
@@ -200,3 +200,41 @@ ersha-registry-deploy:
 # Run ersha registry for dev
 ersha-registry-run:
   cd {{ersha_registry_dir}} && npm run dev
+
+# ============================================================
+# Docker Recipes
+# ============================================================
+
+docker_keys := "docker/keys"
+
+# Distribute TLS keys for Docker compose volumes
+tls-dist-docker:
+    @echo "Distributing keys for Docker..."
+    mkdir -p {{docker_keys}}/server {{docker_keys}}/client
+    cp {{tls_dir}}/server.crt {{tls_dir}}/server.key {{tls_dir}}/root_ca.crt {{docker_keys}}/server/
+    cp {{tls_dir}}/client.crt {{tls_dir}}/client.key {{tls_dir}}/root_ca.crt {{docker_keys}}/client/
+
+# Full TLS setup including Docker keys
+tls-setup-docker: tls-gen tls-dist tls-dist-docker tls-clean-tmp
+
+# Wipe all keys then regenerate with Docker SANs
+docker-tls-reset: tls-wipe tls-setup-docker
+
+# Build Docker images
+docker-build:
+    docker compose build
+
+# Start the full stack (builds if needed)
+docker-up *ARGS:
+    docker compose up -d {{ARGS}}
+
+# Stop the full stack
+docker-down:
+    docker compose down
+
+# Follow logs for all or specific services
+docker-logs *ARGS:
+    docker compose logs -f {{ARGS}}
+
+# Full Docker bootstrap: wipe TLS, regenerate with Docker SANs, build, and start
+docker-bootstrap: docker-tls-reset docker-build docker-up

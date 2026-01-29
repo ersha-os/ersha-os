@@ -1,0 +1,8 @@
+target/
+.git/
+.direnv/
+ersha-registry/node_modules/
+ersha-registry/dist/
+ersha-registry/elm-stuff/
+ersha-grafana/
+*.log

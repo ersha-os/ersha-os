@@ -1,0 +1,262 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1030" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#22c55e"/>
+    </marker>
+    <marker id="arrow-dim" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#555"/>
+    </marker>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1400" height="1030" fill="#0a0a0a" rx="0"/>
+
+  <!-- Title -->
+  <text x="700" y="52" text-anchor="middle" fill="#e8e8e8" font-size="28" font-weight="700" letter-spacing="-0.5">Ersha OS Architecture</text>
+  <text x="700" y="78" text-anchor="middle" fill="#555" font-size="14" letter-spacing="3" font-weight="400">SMART AGRICULTURE MONITORING PLATFORM</text>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- TIER 1: EDGE (top) -->
+  <!-- ════════════════════════════════════════════ -->
+  <rect x="40" y="105" width="1320" height="195" rx="12" fill="#0d1a0d" stroke="#22c55e" stroke-width="1.5" stroke-opacity="0.4"/>
+  <text x="68" y="134" fill="#22c55e" font-size="12" font-weight="700" letter-spacing="3">EDGE TIER</text>
+  <text x="68" y="152" fill="#555" font-size="11">Sensor devices in the field</text>
+
+  <!-- Edge Device 1 -->
+  <rect x="80" y="170" width="230" height="110" rx="8" fill="#141414" stroke="#222" stroke-width="1"/>
+  <circle cx="104" cy="196" r="10" fill="none" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="104" y="200" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="700">1</text>
+  <text x="120" y="200" fill="#e8e8e8" font-size="14" font-weight="600">ersha-edge</text>
+  <text x="96" y="222" fill="#888" font-size="11">Embedded SDK (no_std)</text>
+  <text x="96" y="240" fill="#666" font-size="10">Embassy, Sensor/Transport traits</text>
+
+  <!-- Edge Device 2 -->
+  <rect x="390" y="170" width="230" height="110" rx="8" fill="#141414" stroke="#222" stroke-width="1"/>
+  <circle cx="414" cy="196" r="10" fill="none" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="414" y="200" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="700">2</text>
+  <text x="430" y="200" fill="#e8e8e8" font-size="14" font-weight="600">ersha-edge</text>
+  <text x="406" y="222" fill="#888" font-size="11">Embedded SDK (no_std)</text>
+  <text x="406" y="240" fill="#666" font-size="10">Embassy, Sensor/Transport traits</text>
+
+  <!-- Edge Device 3 -->
+  <rect x="700" y="170" width="230" height="110" rx="8" fill="#141414" stroke="#222" stroke-width="1"/>
+  <circle cx="724" cy="196" r="10" fill="none" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="724" y="200" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="700">3</text>
+  <text x="740" y="200" fill="#e8e8e8" font-size="14" font-weight="600">ersha-edge</text>
+  <text x="716" y="222" fill="#888" font-size="11">Embedded SDK (no_std)</text>
+  <text x="716" y="240" fill="#666" font-size="10">Embassy, Sensor/Transport traits</text>
+
+  <!-- Ellipsis device -->
+  <rect x="1010" y="170" width="120" height="110" rx="8" fill="#141414" stroke="#222" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="1070" y="225" text-anchor="middle" fill="#555" font-size="24" letter-spacing="4">...</text>
+  <text x="1070" y="250" text-anchor="middle" fill="#444" font-size="11">N devices</text>
+
+  <!-- Protocol label: Edge -> Dispatch -->
+  <rect x="1210" y="175" width="130" height="100" rx="8" fill="#0d1a0d" stroke="#22c55e" stroke-width="1" stroke-opacity="0.3"/>
+  <text x="1275" y="200" text-anchor="middle" fill="#22c55e" font-size="11" font-weight="600">PROTOCOL</text>
+  <text x="1275" y="220" text-anchor="middle" fill="#888" font-size="10">Postcard binary</text>
+  <text x="1275" y="236" text-anchor="middle" fill="#888" font-size="10">Framed packets</text>
+  <text x="1275" y="252" text-anchor="middle" fill="#888" font-size="10">WiFi TCP</text>
+  <text x="1275" y="268" text-anchor="middle" fill="#555" font-size="10">LoRaWAN (planned)</text>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- Arrows: Edge -> Dispatch -->
+  <!-- ════════════════════════════════════════════ -->
+  <line x1="195" y1="300" x2="195" y2="345" stroke="#22c55e" stroke-width="2" marker-end="url(#arrow)" stroke-opacity="0.7"/>
+  <line x1="505" y1="300" x2="505" y2="345" stroke="#22c55e" stroke-width="2" marker-end="url(#arrow)" stroke-opacity="0.7"/>
+  <line x1="815" y1="300" x2="815" y2="345" stroke="#22c55e" stroke-width="2" marker-end="url(#arrow)" stroke-opacity="0.7"/>
+  <text x="1200" y="330" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="600" letter-spacing="1">POSTCARD BINARY FRAMES</text>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- TIER 2: DISPATCH (middle) -->
+  <!-- ════════════════════════════════════════════ -->
+  <rect x="40" y="350" width="1320" height="195" rx="12" fill="#1a1510" stroke="#f59e0b" stroke-width="1.5" stroke-opacity="0.4"/>
+  <text x="68" y="379" fill="#f59e0b" font-size="12" font-weight="700" letter-spacing="3">DISPATCH TIER</text>
+  <text x="68" y="397" fill="#555" font-size="11">Gateway nodes near the farms</text>
+
+  <!-- Dispatcher 1 -->
+  <rect x="80" y="415" width="350" height="110" rx="8" fill="#141414" stroke="#222" stroke-width="1"/>
+  <text x="104" y="442" fill="#f59e0b" font-size="15" font-weight="700">ersha-dispatch</text>
+  <text x="260" y="442" fill="#555" font-size="11">Region A</text>
+
+  <rect x="96" y="454" width="100" height="24" rx="5" fill="#1a1510" stroke="#f59e0b" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="146" y="470" text-anchor="middle" fill="#f59e0b" font-size="10">TCP Receiver</text>
+
+  <rect x="204" y="454" width="100" height="24" rx="5" fill="#1a1510" stroke="#f59e0b" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="254" y="470" text-anchor="middle" fill="#f59e0b" font-size="10">SQLite Buffer</text>
+
+  <rect x="312" y="454" width="100" height="24" rx="5" fill="#1a1510" stroke="#f59e0b" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="362" y="470" text-anchor="middle" fill="#f59e0b" font-size="10">Batch Upload</text>
+
+  <text x="96" y="504" fill="#666" font-size="10">Receives edge frames, buffers locally, batches &amp; relays to prime</text>
+  <text x="96" y="518" fill="#555" font-size="10">HTTP health | Pluggable storage backends</text>
+
+  <!-- Dispatcher 2 -->
+  <rect x="460" y="415" width="350" height="110" rx="8" fill="#141414" stroke="#222" stroke-width="1"/>
+  <text x="484" y="442" fill="#f59e0b" font-size="15" font-weight="700">ersha-dispatch</text>
+  <text x="640" y="442" fill="#555" font-size="11">Region B</text>
+
+  <rect x="476" y="454" width="100" height="24" rx="5" fill="#1a1510" stroke="#f59e0b" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="526" y="470" text-anchor="middle" fill="#f59e0b" font-size="10">TCP Receiver</text>
+
+  <rect x="584" y="454" width="100" height="24" rx="5" fill="#1a1510" stroke="#f59e0b" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="634" y="470" text-anchor="middle" fill="#f59e0b" font-size="10">SQLite Buffer</text>
+
+  <rect x="692" y="454" width="100" height="24" rx="5" fill="#1a1510" stroke="#f59e0b" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="742" y="470" text-anchor="middle" fill="#f59e0b" font-size="10">Batch Upload</text>
+
+  <text x="476" y="504" fill="#666" font-size="10">Receives edge frames, buffers locally, batches &amp; relays to prime</text>
+  <text x="476" y="518" fill="#555" font-size="10">HTTP health | Pluggable storage backends</text>
+
+  <!-- Dispatcher N -->
+  <rect x="840" y="415" width="160" height="110" rx="8" fill="#141414" stroke="#222" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="920" y="468" text-anchor="middle" fill="#555" font-size="24" letter-spacing="4">...</text>
+  <text x="920" y="495" text-anchor="middle" fill="#444" font-size="11">N dispatchers</text>
+
+  <!-- RPC protocol label -->
+  <rect x="1050" y="415" width="280" height="110" rx="8" fill="#141414" stroke="#222" stroke-width="1"/>
+  <text x="1074" y="442" fill="#f59e0b" font-size="12" font-weight="600">ersha-rpc</text>
+  <text x="1074" y="462" fill="#888" font-size="11">Custom binary RPC protocol</text>
+  <text x="1074" y="480" fill="#666" font-size="10">Postcard framing + TLS (Rustls)</text>
+  <text x="1074" y="496" fill="#666" font-size="10">ULID message correlation</text>
+  <text x="1074" y="512" fill="#666" font-size="10">Ping, Hello, BatchUpload, Alert</text>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- Arrows: Dispatch -> Central -->
+  <!-- ════════════════════════════════════════════ -->
+  <line x1="255" y1="545" x2="450" y2="595" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow-dim)" stroke-opacity="0.6"/>
+  <line x1="635" y1="545" x2="635" y2="595" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow-dim)" stroke-opacity="0.6"/>
+  <line x1="920" y1="545" x2="780" y2="595" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow-dim)" stroke-opacity="0.6"/>
+  <text x="1200" y="578" text-anchor="middle" fill="#f59e0b" font-size="10" font-weight="600" letter-spacing="1">RPC OVER TLS</text>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- TIER 3: CENTRAL (bottom-left) -->
+  <!-- ════════════════════════════════════════════ -->
+  <rect x="40" y="600" width="780" height="210" rx="12" fill="#101828" stroke="#3b82f6" stroke-width="1.5" stroke-opacity="0.4"/>
+  <text x="68" y="629" fill="#3b82f6" font-size="12" font-weight="700" letter-spacing="3">CENTRAL TIER</text>
+  <text x="68" y="647" fill="#555" font-size="11">Core backend services</text>
+
+  <!-- Prime box -->
+  <rect x="80" y="665" width="380" height="125" rx="8" fill="#141414" stroke="#222" stroke-width="1"/>
+  <text x="104" y="692" fill="#3b82f6" font-size="17" font-weight="700">ersha-prime</text>
+
+  <rect x="96" y="704" width="105" height="22" rx="5" fill="#101828" stroke="#3b82f6" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="148" y="719" text-anchor="middle" fill="#3b82f6" font-size="9">Device Registry</text>
+
+  <rect x="208" y="704" width="120" height="22" rx="5" fill="#101828" stroke="#3b82f6" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="268" y="719" text-anchor="middle" fill="#3b82f6" font-size="9">Dispatcher Registry</text>
+
+  <rect x="335" y="704" width="110" height="22" rx="5" fill="#101828" stroke="#3b82f6" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="390" y="719" text-anchor="middle" fill="#3b82f6" font-size="9">Reading Registry</text>
+
+  <rect x="96" y="732" width="120" height="22" rx="5" fill="#101828" stroke="#3b82f6" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="156" y="747" text-anchor="middle" fill="#3b82f6" font-size="9">Status Registry</text>
+
+  <rect x="224" y="732" width="90" height="22" rx="5" fill="#101828" stroke="#3b82f6" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="269" y="747" text-anchor="middle" fill="#3b82f6" font-size="9">HTTP API</text>
+
+  <rect x="322" y="732" width="90" height="22" rx="5" fill="#101828" stroke="#3b82f6" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="367" y="747" text-anchor="middle" fill="#3b82f6" font-size="9">RPC Server</text>
+
+  <text x="96" y="776" fill="#555" font-size="10">HTTP | RPC (TLS) | Pluggable storage</text>
+
+  <!-- Registry UI box -->
+  <rect x="490" y="665" width="300" height="125" rx="8" fill="#141414" stroke="#222" stroke-width="1"/>
+  <text x="514" y="692" fill="#60b5cc" font-size="15" font-weight="700">ersha-registry</text>
+  <text x="652" y="692" fill="#555" font-size="11">Elm SPA</text>
+
+  <rect x="506" y="704" width="120" height="22" rx="5" fill="#0d1a1f" stroke="#60b5cc" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="566" y="719" text-anchor="middle" fill="#60b5cc" font-size="9">Summary Stats</text>
+
+  <rect x="634" y="704" width="140" height="22" rx="5" fill="#0d1a1f" stroke="#60b5cc" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="704" y="719" text-anchor="middle" fill="#60b5cc" font-size="9">List Views</text>
+
+  <rect x="506" y="732" width="120" height="22" rx="5" fill="#0d1a1f" stroke="#60b5cc" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="566" y="747" text-anchor="middle" fill="#60b5cc" font-size="9">Registration Forms</text>
+
+  <rect x="634" y="732" width="140" height="22" rx="5" fill="#0d1a1f" stroke="#60b5cc" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="704" y="747" text-anchor="middle" fill="#60b5cc" font-size="9">Detail Modals</text>
+
+  <text x="506" y="776" fill="#555" font-size="10">Compiled and embedded into ersha-prime binary</text>
+
+  <!-- Arrow: prime -> registry -->
+  <line x1="460" y1="727" x2="487" y2="727" stroke="#444" stroke-width="1.5" marker-end="url(#arrow-dim)"/>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- TIER 4: DATA / ANALYTICS (bottom-right) -->
+  <!-- ════════════════════════════════════════════ -->
+  <rect x="850" y="600" width="510" height="210" rx="12" fill="#130d1a" stroke="#a855f7" stroke-width="1.5" stroke-opacity="0.4"/>
+  <text x="878" y="629" fill="#a855f7" font-size="12" font-weight="700" letter-spacing="3">DATA &amp; ANALYTICS TIER</text>
+  <text x="878" y="647" fill="#555" font-size="11">Storage and visualization</text>
+
+  <!-- ClickHouse -->
+  <rect x="880" y="665" width="220" height="56" rx="8" fill="#141414" stroke="#222" stroke-width="1"/>
+  <text x="904" y="692" fill="#a855f7" font-size="14" font-weight="700">ClickHouse</text>
+  <text x="904" y="710" fill="#666" font-size="10">Time-series analytics database</text>
+
+  <!-- SQLite -->
+  <rect x="1120" y="665" width="210" height="56" rx="8" fill="#141414" stroke="#222" stroke-width="1"/>
+  <text x="1144" y="692" fill="#a855f7" font-size="14" font-weight="700">SQLite</text>
+  <text x="1144" y="710" fill="#666" font-size="10">Local / dev storage backend</text>
+
+  <!-- Grafana -->
+  <rect x="880" y="740" width="220" height="56" rx="8" fill="#141414" stroke="#222" stroke-width="1"/>
+  <text x="904" y="767" fill="#f59e0b" font-size="14" font-weight="700">Grafana</text>
+  <text x="904" y="785" fill="#666" font-size="10">Visualization dashboards</text>
+
+  <!-- Alerts -->
+  <rect x="1120" y="740" width="210" height="56" rx="8" fill="#141414" stroke="#222" stroke-width="1"/>
+  <text x="1144" y="767" fill="#ef4444" font-size="14" font-weight="700">Alerts</text>
+  <text x="1144" y="785" fill="#666" font-size="10">Logged server-side</text>
+
+  <!-- Arrow: Prime -> Data -->
+  <line x1="820" y1="727" x2="847" y2="727" stroke="#444" stroke-width="1.5" marker-end="url(#arrow-dim)"/>
+
+  <!-- Arrow: ClickHouse -> Grafana -->
+  <line x1="990" y1="721" x2="990" y2="737" stroke="#444" stroke-width="1" marker-end="url(#arrow-dim)"/>
+
+  <!-- ════════════════════════════════════════════ -->
+  <!-- SHARED CRATES (bottom bar) -->
+  <!-- ════════════════════════════════════════════ -->
+  <rect x="40" y="840" width="1320" height="175" rx="12" fill="#111" stroke="#222" stroke-width="1"/>
+  <text x="68" y="868" fill="#888" font-size="12" font-weight="700" letter-spacing="3">SHARED CRATES</text>
+
+  <!-- ersha-core -->
+  <rect x="80" y="882" width="300" height="70" rx="6" fill="#1a1a2e" stroke="#333" stroke-width="1"/>
+  <text x="96" y="904" fill="#e8e8e8" font-size="12" font-weight="700">ersha-core</text>
+  <text x="96" y="922" fill="#888" font-size="10">Shared domain types &amp; logic</text>
+  <text x="96" y="938" fill="#666" font-size="10">Devices, sensors, alerts, H3 cells</text>
+
+  <!-- ersha-rpc -->
+  <rect x="395" y="882" width="295" height="70" rx="6" fill="#1a1a2e" stroke="#333" stroke-width="1"/>
+  <text x="411" y="904" fill="#e8e8e8" font-size="12" font-weight="700">ersha-rpc</text>
+  <text x="411" y="922" fill="#888" font-size="10">Binary RPC framing layer</text>
+  <text x="411" y="938" fill="#666" font-size="10">Postcard serialization + TLS</text>
+
+  <!-- ersha-tls -->
+  <rect x="705" y="882" width="295" height="70" rx="6" fill="#1a1a2e" stroke="#333" stroke-width="1"/>
+  <text x="721" y="904" fill="#e8e8e8" font-size="12" font-weight="700">ersha-tls</text>
+  <text x="721" y="922" fill="#888" font-size="10">Certificate management</text>
+  <text x="721" y="938" fill="#666" font-size="10">Root CA, mTLS via Rustls</text>
+
+  <!-- ersha-dispatchers-harness -->
+  <rect x="1015" y="882" width="325" height="70" rx="6" fill="#1a1a2e" stroke="#333" stroke-width="1"/>
+  <text x="1031" y="904" fill="#e8e8e8" font-size="12" font-weight="700">ersha-dispatchers-harness</text>
+  <text x="1031" y="922" fill="#888" font-size="10">Integration test harness</text>
+  <text x="1031" y="938" fill="#666" font-size="10">Simulated dispatchers &amp; devices</text>
+
+  <!-- Tech badges -->
+  <text x="1070" y="970" fill="#444" font-size="10" letter-spacing="1">BUILT WITH</text>
+  <rect x="1070" y="977" width="60" height="25" rx="6" fill="#2a1810" stroke="#de6b2e" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="1100" y="994" text-anchor="middle" fill="#de6b2e" font-size="11" font-weight="600">Rust</text>
+  <rect x="1140" y="977" width="50" height="25" rx="6" fill="#0d1a1f" stroke="#60b5cc" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="1165" y="994" text-anchor="middle" fill="#60b5cc" font-size="11" font-weight="600">Elm</text>
+  <rect x="1200" y="977" width="60" height="25" rx="6" fill="#1a0d1f" stroke="#a855f7" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="1230" y="994" text-anchor="middle" fill="#a855f7" font-size="11" font-weight="600">Tokio</text>
+  <rect x="1270" y="977" width="60" height="25" rx="6" fill="#0d1a10" stroke="#22c55e" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="1300" y="994" text-anchor="middle" fill="#22c55e" font-size="11" font-weight="600">Axum</text>
+</svg>

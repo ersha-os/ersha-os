@@ -1,0 +1,71 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    ports:
+      - "8123:8123"
+      - "9001:9000"
+    environment:
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+      - CLICKHOUSE_PASSWORD=
+    volumes:
+      - ./docker/clickhouse/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ersha-prime:
+    build:
+      context: .
+      target: ersha-prime
+    ports:
+      - "9000:9000"
+      - "8080:8080"
+    volumes:
+      - ./docker/ersha-prime.toml:/etc/ersha/ersha-prime.toml:ro
+      - ./docker/keys/server:/etc/ersha/keys:ro
+    command: ["--config", "/etc/ersha/ersha-prime.toml"]
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  ersha-harness:
+    build:
+      context: .
+      target: ersha-harness
+    volumes:
+      - ./docker/ersha-dispatchers-harness.toml:/etc/ersha/ersha-dispatchers-harness.toml:ro
+      - ./docker/keys/client:/etc/ersha/keys:ro
+    command: ["--config", "/etc/ersha/ersha-dispatchers-harness.toml"]
+    depends_on:
+      ersha-prime:
+        condition: service_healthy
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/overview.json
+    volumes:
+      - ./docker/grafana-datasources:/etc/grafana/provisioning/datasources:ro
+      - ./ersha-grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./ersha-grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
+      - ./ersha-grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+volumes:
+  grafana-data:

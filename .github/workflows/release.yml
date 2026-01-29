@@ -87,12 +87,33 @@ jobs:
           name: artifacts-plan-dist-manifest
           path: plan-dist-manifest.json
 
+  # Build the Elm-based registry UI on x86_64 and share with all platform builds
+  build-registry-ui:
+    runs-on: "ubuntu-22.04"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: recursive
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build Registry UI
+        run: cd ersha-registry && npm install && npm run build
+      - name: Upload Registry UI
+        uses: actions/upload-artifact@v4
+        with:
+          name: registry-ui-dist
+          path: ersha-registry/dist/
+
   # Build and packages all the platform-specific things
   build-local-artifacts:
     name: build-local-artifacts (${{ join(matrix.targets, ', ') }})
     # Let the initial task tell us to not run (currently very blunt)
     needs:
       - plan
+      - build-registry-ui
     if: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null && (needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload') }}
     strategy:
       fail-fast: false
@@ -139,12 +160,11 @@ jobs:
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Download Registry UI
+        uses: actions/download-artifact@v4
         with:
-          node-version: '22'
-      - name: Build Registry UI
-        run: cd ersha-registry && npm install && npm run build
+          name: registry-ui-dist
+          path: ersha-registry/dist/
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot

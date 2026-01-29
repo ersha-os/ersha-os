@@ -1,0 +1,14 @@
+[server]
+rpc_addr = "0.0.0.0:9000"
+http_addr = "0.0.0.0:8080"
+
+[registry]
+type = "clickhouse"
+url = "http://clickhouse:8123"
+database = "ersha_test"
+
+[tls]
+cert = "/etc/ersha/keys/server.crt"
+key = "/etc/ersha/keys/server.key"
+root_ca = "/etc/ersha/keys/root_ca.crt"
+domain = "ersha-prime"
