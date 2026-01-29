@@ -119,6 +119,7 @@ where
                 *reading_interval_secs,
                 *status_interval_secs,
                 *device_count,
+                location,
             );
 
             // Register dispatcher and mock devices with ersha-prime via HTTP API

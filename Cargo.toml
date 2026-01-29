@@ -2,6 +2,7 @@
 members = [
     "ersha-core",
     "ersha-dispatch",
+    "ersha-dispatchers-harness",
     "ersha-prime",
     "ersha-rpc",
     "ersha-edge", "ersha-tls",

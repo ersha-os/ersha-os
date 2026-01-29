@@ -936,6 +936,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ersha-dispatchers-harness"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "color-eyre",
+ "h3o",
+ "serde",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "ulid",
+]
+
+[[package]]
 name = "ersha-edge"
 version = "0.1.0"
 dependencies = [

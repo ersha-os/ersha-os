@@ -41,8 +41,9 @@ impl MockEdgeReceiver {
         reading_interval_secs: u64,
         status_interval_secs: u64,
         device_count: usize,
+        center: H3Cell,
     ) -> Self {
-        let cells = generate_ethiopian_cells(device_count);
+        let cells = generate_nearby_cells(center, device_count);
         let devices = cells.into_iter().map(MockDevice::new).collect();
 
         Self {
@@ -69,44 +70,47 @@ impl MockEdgeReceiver {
     }
 }
 
-/// Generate H3 resolution-10 cells spread across Ethiopia.
+/// Generate H3 resolution-10 cells near a center location.
 ///
-/// Uses Ethiopia's approximate bounding box (lat 3.4°–14.9°, lng 33°–48°)
-/// to create a grid of points, converts each to an H3 cell, deduplicates,
-/// and returns the requested count.
-fn generate_ethiopian_cells(count: usize) -> Vec<H3Cell> {
-    let lat_min = 3.4_f64;
-    let lat_max = 14.9_f64;
-    let lng_min = 33.0_f64;
-    let lng_max = 48.0_f64;
+/// Creates `count` unique cells by adding random lat/lng offsets within ~0.05°
+/// (~5.5 km at Ethiopian latitudes) of the center, giving an ~11 km diameter
+/// coverage area per dispatcher.
+fn generate_nearby_cells(center: H3Cell, count: usize) -> Vec<H3Cell> {
+    let center_cell = h3o::CellIndex::try_from(center.0).expect("valid H3 cell");
+    let center_ll = LatLng::from(center_cell);
+    let center_lat = center_ll.lat();
+    let center_lng = center_ll.lng();
 
-    // Calculate grid dimensions to produce enough unique cells.
-    // Use a square-ish grid with some oversampling to account for deduplication.
-    let oversample = (count as f64 * 1.5).sqrt().ceil() as usize;
-    let rows = oversample;
-    let cols = oversample;
+    let mut rng = rand::rng();
+    let radius = 0.05_f64; // ~5.5 km at Ethiopian latitudes
 
-    let lat_step = (lat_max - lat_min) / rows as f64;
-    let lng_step = (lng_max - lng_min) / cols as f64;
-
-    let mut cells = Vec::new();
+    let mut cells = Vec::with_capacity(count);
     let mut seen = std::collections::HashSet::new();
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let lat = lat_min + (r as f64 + 0.5) * lat_step;
-            let lng = lng_min + (c as f64 + 0.5) * lng_step;
+    // Always include the center cell itself
+    seen.insert(center.0);
+    cells.push(center);
 
-            let ll = LatLng::new(lat, lng).expect("valid lat/lng for Ethiopia");
-            let cell = ll.to_cell(Resolution::Ten);
-            let cell_u64 = u64::from(cell);
+    let max_attempts = count * 10;
+    let mut attempts = 0;
 
-            if seen.insert(cell_u64) {
-                cells.push(H3Cell(cell_u64));
-                if cells.len() == count {
-                    return cells;
-                }
-            }
+    while cells.len() < count && attempts < max_attempts {
+        attempts += 1;
+
+        let lat_offset: f64 = rng.random_range(-radius..radius);
+        let lng_offset: f64 = rng.random_range(-radius..radius);
+
+        let lat = center_lat + lat_offset;
+        let lng = center_lng + lng_offset;
+
+        let Ok(ll) = LatLng::new(lat, lng) else {
+            continue;
+        };
+        let cell = ll.to_cell(Resolution::Ten);
+        let cell_u64 = u64::from(cell);
+
+        if seen.insert(cell_u64) {
+            cells.push(H3Cell(cell_u64));
         }
     }
 

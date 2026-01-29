@@ -1,0 +1,14 @@
+dispatcher_count = 10
+devices_per_dispatcher = 10
+reading_interval_secs = 5
+status_interval_secs = 30
+upload_interval_secs = 60
+base_http_port = 9100
+ersha_dispatch_bin = "../target/debug/ersha-dispatch"
+prime_rpc_addr = "127.0.0.1:9000"
+
+[tls]
+cert = "../ersha-dispatch/keys/client.crt"
+key = "../ersha-dispatch/keys/client.key"
+root_ca = "../ersha-dispatch/keys/root_ca.crt"
+domain = "localhost"
