@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 use std::{net::SocketAddr, sync::Arc};
 
+use axum::http::{StatusCode, header};
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use clap::Parser;
 use ersha_core::{
@@ -33,7 +35,10 @@ use ersha_tls::TlsConfig;
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use tokio_util::sync::CancellationToken;
-use tower_http::services::ServeDir;
+
+#[derive(rust_embed::RustEmbed)]
+#[folder = "../ersha-registry/dist"]
+struct RegistryAssets;
 use tracing::{error, info, warn};
 
 #[derive(Parser)]
@@ -351,12 +356,10 @@ where
     // Create the API router with dispatcher and device routes
     let api_router = api::api_router(api_dispatcher_registry, api_device_registry);
 
-    let serve_dir = ServeDir::new("public").append_index_html_on_directories(true);
-
     // Merge with health endpoint
     let axum_app = api_router
         .route("/health", get(health_handler))
-        .fallback_service(serve_dir);
+        .fallback(static_handler);
 
     let axum_listener = TcpListener::bind(http_addr).await?;
     info!(%http_addr, "HTTP server listening");
@@ -385,4 +388,31 @@ where
 
 async fn health_handler() -> &'static str {
     "OK"
+}
+
+async fn static_handler(uri: axum::http::Uri) -> Response {
+    let path = uri.path().trim_start_matches('/');
+
+    // Try the exact path first, then fall back to index.html for SPA routing
+    let file = RegistryAssets::get(path).or_else(|| RegistryAssets::get("index.html"));
+
+    match file {
+        Some(content) => {
+            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            // Use text/html for SPA fallback (when we fell back to index.html)
+            let mime = if RegistryAssets::get(path).is_none() {
+                "text/html".parse().unwrap()
+            } else {
+                mime
+            };
+
+            (
+                StatusCode::OK,
+                [(header::CONTENT_TYPE, mime.as_ref())],
+                content.data,
+            )
+                .into_response()
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }

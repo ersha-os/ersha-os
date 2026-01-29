@@ -27,4 +27,5 @@ reqwest.workspace = true
 clickhouse.workspace = true
 tokio-rustls.workspace = true
 rustls.workspace = true
-tower-http = { version = "0.6.8", features = ["fs"] }
+rust-embed = "8"
+mime_guess = "2"

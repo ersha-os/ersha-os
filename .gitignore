@@ -7,5 +7,3 @@ ersha-prime/keys/*
 ersha-tls/*.crt
 ersha-tls/*.key
 ersha-rpc/examples/keys/*
-
-ersha-prime/public/*

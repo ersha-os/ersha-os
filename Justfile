@@ -190,23 +190,12 @@ tls-wipe:
 # ============================================================
 
 ersha_registry_dir := "ersha-registry"
-prime_public := "ersha-prime/public"
 
-# Build UI and move assets to ersha-prime/public for Axum to serve
+# Build UI (assets are embedded into the ersha-prime binary via rust_embed)
 ersha-registry-deploy:
     @echo "Building ersha-registry..."
     cd {{ersha_registry_dir}} && npm run build
-
-    @echo "Preparing ersha-prime public directory..."
-    mkdir -p {{prime_public}}
-
-    # Clean old assets to prevent staleness
-    rm -rf {{prime_public}}/*
-
-    @echo "Moving built files to {{prime_public}}..."
-    cp -r {{ersha_registry_dir}}/dist/* {{prime_public}}/
-
-    @echo "Done! Axum can now serve the UI from {{prime_public}}"
+    @echo "Done! Assets will be embedded on next cargo build."
 
 # Run ersha registry for dev
 ersha-registry-run:
