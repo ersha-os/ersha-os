@@ -139,6 +139,12 @@ jobs:
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build Registry UI
+        run: cd ersha-registry && npm install && npm run build
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot

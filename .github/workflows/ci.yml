@@ -20,6 +20,9 @@ jobs:
       - name: Run Flake Check
         run: nix flake check
 
+      - name: Build Registry UI
+        run: nix develop -c bash -c "cd ersha-registry && npm install && npm run build"
+
       - name: Check Rust Formatting
         run: nix develop -c cargo fmt --check
 
