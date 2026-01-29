@@ -72,7 +72,7 @@ impl Default for Config {
         Self {
             dispatcher: DispatcherConfig {
                 id: "01JJNQ1KQCNZ8X9PQRV5ABCD12".to_string(),
-                location: 0x8a2a1072b59ffff,
+                location: 0x8a529b4c8daffff,
             },
             server: ServerConfig {
                 http_addr: "0.0.0.0:8081".parse().unwrap(),
@@ -85,7 +85,7 @@ impl Default for Config {
             edge: EdgeConfig::Mock {
                 reading_interval_secs: 5,
                 status_interval_secs: 30,
-                device_count: 3,
+                device_count: 100,
             },
             tls: TlsConfig::client_default(),
         }

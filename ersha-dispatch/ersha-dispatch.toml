@@ -1,6 +1,6 @@
 [dispatcher]
 id = "01JJNQ1KQCNZ8X9PQRV5ABCD12"
-location = 0x8a2a1072b59ffff
+location = 0x8a529b4c8daffff
 
 [server]
 http_addr = "0.0.0.0:8081"
@@ -16,7 +16,7 @@ upload_interval_secs = 60
 type = "mock"
 reading_interval_secs = 5
 status_interval_secs = 30
-device_count = 3
+device_count = 100
 
 [tls]
 cert = "./keys/client.crt"

@@ -29,5 +29,7 @@ ulid.workspace = true
 postcard.workspace = true
 tokio-rustls.workspace = true
 rustls.workspace = true
+h3o = "0.7"
+reqwest.workspace = true
 
 [dev-dependencies]

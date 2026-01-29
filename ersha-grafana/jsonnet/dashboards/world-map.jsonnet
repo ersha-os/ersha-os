@@ -26,9 +26,9 @@ local dispatcherMap =
   ])
   + g.panel.geomap.options.withView({
     id: 'coords',
-    lat: 20,
-    lon: 0,
-    zoom: 2,
+    lat: 9,
+    lon: 39,
+    zoom: 5,
   })
   + g.panel.geomap.options.withBasemap({
     type: 'default',
@@ -72,27 +72,94 @@ local dispatcherMap =
   + g.panel.geomap.gridPos.withW(24)
   + g.panel.geomap.gridPos.withH(16);
 
-// Geomap panel showing device locations (via dispatchers)
+// Geomap panel showing individual device locations
+local deviceMap =
+  g.panel.geomap.new('Device Locations')
+  + g.panel.geomap.queryOptions.withDatasource('grafana-clickhouse-datasource', '${DS_CLICKHOUSE}')
+  + g.panel.geomap.queryOptions.withTargets([
+    common.clickhouseTarget(|||
+      SELECT
+        dev.id as name,
+        h3ToGeo(toUInt64(dev.location)).1 as latitude,
+        h3ToGeo(toUInt64(dev.location)).2 as longitude,
+        dev.sensor_count,
+        COALESCE(dev.manufacturer, 'Unknown') as manufacturer,
+        CASE dev.state
+          WHEN 0 THEN 'Inactive'
+          WHEN 1 THEN 'Active'
+          ELSE 'Unknown'
+        END as state
+      FROM devices dev FINAL
+    |||, 'A', 2),
+  ])
+  + g.panel.geomap.options.withView({
+    id: 'coords',
+    lat: 9,
+    lon: 39,
+    zoom: 5,
+  })
+  + g.panel.geomap.options.withBasemap({
+    type: 'default',
+    name: 'World',
+  })
+  + g.panel.geomap.options.withLayers([
+    {
+      type: 'markers',
+      name: 'Devices',
+      config: {
+        showLegend: true,
+        style: {
+          size: {
+            fixed: 6,
+            min: 4,
+            max: 12,
+            field: 'sensor_count',
+          },
+          color: {
+            field: 'state',
+            fixed: 'semi-dark-blue',
+          },
+          symbol: {
+            mode: 'fixed',
+            fixed: 'img/icons/marker/circle.svg',
+          },
+          opacity: 0.7,
+        },
+      },
+      location: {
+        mode: 'coords',
+        latitude: 'latitude',
+        longitude: 'longitude',
+      },
+      tooltip: true,
+    },
+  ])
+  + g.panel.geomap.options.withTooltip({
+    mode: 'details',
+  })
+  + g.panel.geomap.gridPos.withW(24)
+  + g.panel.geomap.gridPos.withH(16);
+
+// Geomap panel showing sensor reading density as heatmap
 local deviceHeatmap =
   g.panel.geomap.new('Sensor Reading Density')
   + g.panel.geomap.queryOptions.withDatasource('grafana-clickhouse-datasource', '${DS_CLICKHOUSE}')
   + g.panel.geomap.queryOptions.withTargets([
     common.clickhouseTarget(|||
       SELECT
-        h3ToGeo(toUInt64(d.location)).1 as latitude,
-        h3ToGeo(toUInt64(d.location)).2 as longitude,
+        h3ToGeo(toUInt64(sr.location)).1 as latitude,
+        h3ToGeo(toUInt64(sr.location)).2 as longitude,
         count() as reading_count
       FROM sensor_readings sr
-      JOIN dispatchers d FINAL ON 1=1
       WHERE sr.timestamp >= $__fromTime AND sr.timestamp <= $__toTime
-      GROUP BY d.location
+      GROUP BY sr.location
     |||, 'A', 2),
   ])
   + g.panel.geomap.options.withView({
     id: 'coords',
-    lat: 20,
-    lon: 0,
-    zoom: 2,
+    lat: 9,
+    lon: 39,
+    zoom: 5,
   })
   + g.panel.geomap.options.withBasemap({
     type: 'default',
@@ -145,6 +212,30 @@ local h3CellDetails = common.tablePanel(
 + g.panel.table.gridPos.withW(12)
 + g.panel.table.gridPos.withH(12);
 
+// Device Details table
+local deviceDetails = common.tablePanel(
+  'Device Details',
+  |||
+    SELECT
+      dev.id as device_id,
+      hex(dev.location) as h3_hex,
+      h3ToGeo(toUInt64(dev.location)).1 as latitude,
+      h3ToGeo(toUInt64(dev.location)).2 as longitude,
+      dev.sensor_count,
+      COALESCE(dev.manufacturer, 'Unknown') as manufacturer,
+      CASE dev.state
+        WHEN 0 THEN 'Inactive'
+        WHEN 1 THEN 'Active'
+        ELSE 'Unknown'
+      END as state
+    FROM devices dev FINAL
+    ORDER BY dev.id
+    LIMIT 100
+  |||
+)
++ g.panel.table.gridPos.withW(12)
++ g.panel.table.gridPos.withH(12);
+
 // Stats row
 local totalDispatchers = common.statPanel(
   'Total Dispatchers',
@@ -184,9 +275,25 @@ local totalCoverage = common.statPanel(
 + g.panel.stat.gridPos.withW(4)
 + g.panel.stat.gridPos.withH(4);
 
-local devicesPerCell = common.statPanel(
+local totalDevices = common.statPanel(
   'Total Devices',
   'SELECT count() FROM devices FINAL'
+)
++ g.panel.stat.gridPos.withW(4)
++ g.panel.stat.gridPos.withH(4);
+
+local activeDevices = common.statPanel(
+  'Active Devices',
+  'SELECT count() FROM devices FINAL WHERE state = 1'
+)
++ g.panel.stat.gridPos.withW(4)
++ g.panel.stat.gridPos.withH(4)
++ g.panel.stat.standardOptions.color.withMode('fixed')
++ g.panel.stat.standardOptions.color.withFixedColor('semi-dark-blue');
+
+local uniqueDeviceCells = common.statPanel(
+  'Unique Device Cells',
+  'SELECT count(DISTINCT location) FROM devices FINAL'
 )
 + g.panel.stat.gridPos.withW(4)
 + g.panel.stat.gridPos.withH(4);
@@ -199,15 +306,21 @@ common.dashboard('World Map', 'ersha-world-map', ['map', 'h3'])
   // Row 1: Stats
   totalDispatchers + g.panel.stat.gridPos.withX(0) + g.panel.stat.gridPos.withY(0),
   activeDispatchers + g.panel.stat.gridPos.withX(4) + g.panel.stat.gridPos.withY(0),
-  uniqueH3Cells + g.panel.stat.gridPos.withX(8) + g.panel.stat.gridPos.withY(0),
-  avgH3Resolution + g.panel.stat.gridPos.withX(12) + g.panel.stat.gridPos.withY(0),
-  totalCoverage + g.panel.stat.gridPos.withX(16) + g.panel.stat.gridPos.withY(0),
-  devicesPerCell + g.panel.stat.gridPos.withX(20) + g.panel.stat.gridPos.withY(0),
+  totalDevices + g.panel.stat.gridPos.withX(8) + g.panel.stat.gridPos.withY(0),
+  activeDevices + g.panel.stat.gridPos.withX(12) + g.panel.stat.gridPos.withY(0),
+  uniqueDeviceCells + g.panel.stat.gridPos.withX(16) + g.panel.stat.gridPos.withY(0),
+  totalCoverage + g.panel.stat.gridPos.withX(20) + g.panel.stat.gridPos.withY(0),
 
-  // Row 2: Main map
+  // Row 2: Dispatcher map
   dispatcherMap + g.panel.geomap.gridPos.withX(0) + g.panel.geomap.gridPos.withY(4),
 
-  // Row 3: Heatmap and details
-  deviceHeatmap + g.panel.geomap.gridPos.withX(0) + g.panel.geomap.gridPos.withY(20),
-  h3CellDetails + g.panel.table.gridPos.withX(12) + g.panel.table.gridPos.withY(20),
+  // Row 3: Device map
+  deviceMap + g.panel.geomap.gridPos.withX(0) + g.panel.geomap.gridPos.withY(20),
+
+  // Row 4: Heatmap and details
+  deviceHeatmap + g.panel.geomap.gridPos.withX(0) + g.panel.geomap.gridPos.withY(36),
+  deviceDetails + g.panel.table.gridPos.withX(12) + g.panel.table.gridPos.withY(36),
+
+  // Row 5: H3 cell details
+  h3CellDetails + g.panel.table.gridPos.withX(0) + g.panel.table.gridPos.withY(48),
 ])

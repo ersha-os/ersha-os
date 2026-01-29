@@ -12,8 +12,8 @@ use ersha_core::{
 use ersha_dispatch::edge::tcp::TcpEdgeReceiver;
 use ersha_dispatch::{
     Config, DeviceStatusStorage, DispatcherState, EdgeConfig, EdgeData, EdgeReceiver,
-    MemoryStorage, MockEdgeReceiver, PrimeEvent, SensorReadingsStorage, SqliteStorage,
-    StorageConfig,
+    MemoryStorage, MockDeviceInfo, MockEdgeReceiver, PrimeEvent, SensorReadingsStorage,
+    SqliteStorage, StorageConfig,
 };
 use ersha_rpc::Client;
 use ersha_tls::TlsConfig;
@@ -116,11 +116,22 @@ where
 
             let receiver = MockEdgeReceiver::new(
                 dispatcher_id,
-                location,
                 *reading_interval_secs,
                 *status_interval_secs,
                 *device_count,
             );
+
+            // Register dispatcher and mock devices with ersha-prime via HTTP API
+            let prime_http_url =
+                format!("http://{}", config.prime.rpc_addr).replace(":9000", ":8080");
+            register_mock_entities(
+                &prime_http_url,
+                dispatcher_id,
+                location,
+                &receiver.device_info(),
+            )
+            .await;
+
             run_edge_receiver(
                 receiver,
                 cancel,
@@ -532,4 +543,96 @@ async fn connect_and_register(
 
 async fn health_handler() -> &'static str {
     "OK"
+}
+
+/// Sensor kinds in the same order as MockDevice creates them.
+const SENSOR_KINDS: [&str; 5] = [
+    "soil_moisture",
+    "soil_temp",
+    "air_temp",
+    "humidity",
+    "rainfall",
+];
+
+/// Register the dispatcher and all mock devices with ersha-prime's HTTP API.
+///
+/// This is best-effort: if prime is unreachable or already has the entities
+/// registered, we log and continue.
+async fn register_mock_entities(
+    prime_http_url: &str,
+    dispatcher_id: DispatcherId,
+    location: H3Cell,
+    devices: &[MockDeviceInfo],
+) {
+    let http = reqwest::Client::new();
+
+    // Register dispatcher
+    let dispatcher_body = serde_json::json!({
+        "id": dispatcher_id.0.to_string(),
+        "location": location.0,
+    });
+    match http
+        .post(format!("{prime_http_url}/api/dispatchers"))
+        .json(&dispatcher_body)
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => {
+            info!("Registered dispatcher with ersha-prime");
+        }
+        Ok(resp) => {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            warn!(%status, body, "Failed to register dispatcher (may already exist)");
+        }
+        Err(e) => {
+            warn!(error = %e, "Could not reach ersha-prime to register dispatcher");
+        }
+    }
+
+    // Register devices
+    let mut registered = 0u32;
+    let mut failed = 0u32;
+    for device in devices {
+        let sensors: Vec<serde_json::Value> = device
+            .sensor_ids
+            .iter()
+            .zip(SENSOR_KINDS.iter())
+            .map(|(sid, kind)| {
+                serde_json::json!({
+                    "id": sid.0.to_string(),
+                    "kind": kind,
+                })
+            })
+            .collect();
+
+        let body = serde_json::json!({
+            "id": device.device_id.0.to_string(),
+            "location": device.location.0,
+            "kind": "sensor",
+            "manufacturer": "ersha-mock",
+            "sensors": sensors,
+        });
+
+        match http
+            .post(format!("{prime_http_url}/api/devices"))
+            .json(&body)
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => {
+                registered += 1;
+            }
+            Ok(_) | Err(_) => {
+                failed += 1;
+            }
+        }
+    }
+
+    info!(
+        registered,
+        failed,
+        total = devices.len(),
+        "Mock device registration complete"
+    );
 }
